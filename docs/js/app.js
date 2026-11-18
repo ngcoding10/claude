@@ -87,8 +87,11 @@ const rerender = () => current && draw(current, true);
 
 // Navigation before startup finishes is picked up by boot()'s own route() call, once the session is known.
 let booted = false;
+// Pages visited inside the app this session, so the back arrow knows whether "back" stays in Movi.
+let inAppSteps = 0;
 window.addEventListener("hashchange", () => {
   if (!booted) return;
+  inAppSteps++;
   if (flowActive()) cancelRank();
   closeModal();
   if (!location.hash.startsWith("#/film/")) {
@@ -99,8 +102,23 @@ window.addEventListener("hashchange", () => {
 });
 
 // ---------------- Shell ----------------
+// Main tabs have their own button in the tab bar; every other page gets a back arrow on phones,
+// which matters most for the home-screen app, where there is no browser back button.
+function isSubPage() {
+  if (!current) return false;
+  if (["feed", "discover", "lists", "welcome", "onboarding"].includes(current.name)) return false;
+  if (current.name === "u" && S.me && current.args[0] === S.me.username) return false;
+  return true;
+}
+function goBack() {
+  if (inAppSteps > 0) history.back();
+  else location.hash = S.me ? "#/feed" : "#/discover";
+}
+
 function renderShell(active) {
   const me = S.me;
+  const back = $("#backbtn");
+  if (back) back.hidden = !isSubPage();
   const tab = (key, href, icon, label) => `<a href="${href}" class="${active === key ? "active" : ""}" data-nav="${key}" ${active === key ? 'aria-current="page"' : ""}>${icon}<span>${label}</span></a>`;
   const bell = `<a class="iconbtn bell ${active === "notifications" ? "active" : ""}" href="#/notifications" aria-label="Notifications">${ICON.bell}${S.unread ? `<b>${S.unread > 9 ? "9+" : S.unread}</b>` : ""}</a>`;
   $("#topnav").innerHTML = me
@@ -193,6 +211,7 @@ async function act(name, el) {
       return;
     }
     case "skip-main": return $("#view").focus();
+    case "back": return goBack();
     case "shuffle-quick": return shuffleQuick();
     case "bulk-match": {
       el.disabled = true;
