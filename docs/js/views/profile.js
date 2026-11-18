@@ -76,7 +76,7 @@ export async function renderProfile(view, username, tab = "rankings") {
     bindListControls(box, PQ, draw);
     draw();
   } else if (tab === "want") {
-    box.innerHTML = watch.length ? `<div class="grid" style="margin-top:18px">${watch.map((w) => cardHTML(film(w.film_id))).join("")}</div>` : emptyHTML({ title: "Watchlist is empty" });
+    box.innerHTML = watch.length ? `<div class="grid mt-4">${watch.map((w) => cardHTML(film(w.film_id))).join("")}</div>` : emptyHTML({ title: "Watchlist is empty" });
   } else if (tab === "activity") {
     const items = await api.getFeed({ userIds: [p.id], limit: 30 });
     box.innerHTML = items.length ? `<div class="posts">${items.map(postHTML).join("")}</div>` : emptyHTML({ title: "No activity yet" });

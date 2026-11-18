@@ -21,13 +21,13 @@ export function renderToRank(body) {
       <div class="bulk-acts"><button class="btn primary" data-act="bulk-match">${ICON.sparkle} Find my movies</button><span class="muted small" id="bulk-count"></span></div>
       <div id="bulk-review"></div>
     </section>
-    ${S.backlog.length ? `<div class="list-head" style="margin-top:28px"><div><h2 class="h2m" style="margin:0">Waiting to be ranked · ${S.backlog.length}</h2><p class="muted" style="margin:4px 0 0">Rank them one at a time, or run through the whole list.</p></div>
+    ${S.backlog.length ? `<div class="list-head mt-5"><div><h2 class="h2m flush">Waiting to be ranked · ${S.backlog.length}</h2><p class="sub-line">Rank them one at a time, or run through the whole list.</p></div>
       <button class="btn primary" data-act="rank-queue">${ICON.rank} Rank all, one by one</button></div>
-      <div class="grid quick" style="margin-top:16px">${S.backlog.map((b) => cardHTML(film(b.film_id), {
+      <div class="grid quick mt-4">${S.backlog.map((b) => cardHTML(film(b.film_id), {
         label: `Added ${timeAgo(b.created_at)}`,
         acts: `<div class="acts"><button data-act="rank" data-id="${b.film_id}">Rank</button><button data-act="unbacklog" data-id="${b.film_id}">Remove</button></div>`,
       })).join("")}</div>`
-    : `<div style="margin-top:24px">${emptyHTML({ title: "Nothing waiting to be ranked", text: "Films you add above land here, so you can rank them whenever you have a minute." })}</div>`}
+    : `<div class="mt-5">${emptyHTML({ title: "Nothing waiting to be ranked", text: "Films you add above land here, so you can rank them whenever you have a minute." })}</div>`}
     ${api.backlogLocal ? `<p class="muted small center-t">Your To rank list is saved on this device until the To rank database table is set up.</p>` : ""}`;
   const ta = $("#bulk-text");
   const count = () => { const n = ta.value.split(/[\n,;]+/).filter((x) => x.trim()).length; $("#bulk-count").textContent = n ? `${n} title${n === 1 ? "" : "s"}` : ""; };

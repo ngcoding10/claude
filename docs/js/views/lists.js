@@ -97,8 +97,8 @@ function renderWant(body) {
     body.innerHTML = emptyHTML({ title: "Nothing saved yet", text: "Tap “Save” or the bookmark on any film to keep it here.", action: `<a class="btn primary" href="#/discover">Find films</a>` });
     return;
   }
-  body.innerHTML = `<p class="muted" style="margin:14px 0 0">Watched one? Tap “Watched” to rank it.</p>
-    <div class="grid quick" style="margin-top:16px">${S.watch.map((w) => cardHTML(film(w.film_id), {
+  body.innerHTML = `<p class="muted mt-3">Watched one? Tap “Watched” to rank it.</p>
+    <div class="grid quick mt-4">${S.watch.map((w) => cardHTML(film(w.film_id), {
       label: w.from_user ? "Recommended" : `Saved ${timeAgo(w.created_at)}`,
       acts: `<div class="acts"><button data-act="rank" data-id="${w.film_id}">Watched</button><button data-act="unwatch" data-id="${w.film_id}">Remove</button></div>`,
     })).join("")}</div>`;

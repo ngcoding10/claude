@@ -9,7 +9,7 @@ import { followBtnHTML } from "./feed.js";
 let boardTab = "following";
 
 export async function renderLeaderboard(view) {
-  view.innerHTML = `<div class="list-head"><div><h1>Leaderboard</h1><p class="muted" style="margin:4px 0 0">Who's ranked the most films.</p></div></div>
+  view.innerHTML = `<div class="list-head"><div><h1>Leaderboard</h1><p class="sub-line">Who's ranked the most films.</p></div></div>
     <div class="seg big" role="tablist">${["following", "everyone"].map((t) => `<button role="tab" class="${boardTab === t ? "on" : ""}" data-btab="${t}">${t === "following" ? "Friends" : "Everyone"}</button>`).join("")}</div>
     <div id="board">${spinnerHTML()}</div>`;
   view.querySelectorAll("[data-btab]").forEach((b) => b.addEventListener("click", () => { boardTab = b.dataset.btab; renderLeaderboard(view); }));
@@ -69,7 +69,7 @@ export async function handleRequest(uid, approve) {
 }
 
 export async function renderPeople(view) {
-  view.innerHTML = `<div class="list-head"><div><h1>Find people</h1><p class="muted" style="margin:4px 0 0">Follow friends to fill your feed, get rec scores and compare taste.</p></div></div>
+  view.innerHTML = `<div class="list-head"><div><h1>Find people</h1><p class="sub-line">Follow friends to fill your feed, get rec scores and compare taste.</p></div></div>
     <a class="searchbar fake" href="#/search?tab=people">${ICON.search}<span>Search by name or username</span></a>
     <div class="panel-card invite"><div><b>Invite friends to Movi</b><small>Share your profile link so they can follow you.</small></div><button class="btn sm primary" data-act="share-profile" data-username="${esc(S.me.username)}">${ICON.link} Copy invite link</button></div>
     <div id="pbox">${spinnerHTML()}</div>`;
@@ -96,7 +96,7 @@ export async function renderPeople(view) {
 // ---------- Watch together ----------
 const picked = new Set();
 export async function renderTogether(view) {
-  view.innerHTML = `<div class="list-head"><div><h1>Watch together</h1><p class="muted" style="margin:4px 0 0">Pick who's watching. Movi finds films nobody has seen that the group is likely to love.</p></div></div><div id="tbox">${spinnerHTML()}</div>`;
+  view.innerHTML = `<div class="list-head"><div><h1>Watch together</h1><p class="sub-line">Pick who's watching. Movi finds films nobody has seen that the group is likely to love.</p></div></div><div id="tbox">${spinnerHTML()}</div>`;
   const { following } = await api.getFollows(S.me.id);
   const friends = following.filter((f) => f.status === "accepted" && f.profile);
   const box = $("#tbox");

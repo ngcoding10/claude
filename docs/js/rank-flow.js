@@ -157,7 +157,7 @@ function render() {
     const beat = F.against.filter((id) => scoreOf(id).overall > s.overall).map((id) => film(id).title);
     body = `<div class="reveal">
       <div class="big-score ${s.b}">${s.score.toFixed(1)}</div>
-      <h2 style="margin-top:0">${esc(f.title)}</h2>
+      <h2 class="mt-0">${esc(f.title)}</h2>
       <p class="rank"><b>#${s.overall}</b> of ${rankedCount()} in your list · ${BUCKETS[s.b].short}${F.comps ? ` · ${F.comps} pick${F.comps === 1 ? "" : "s"}` : ""}</p>
       ${beat.length ? `<p class="beat">Ranked above ${beat.slice(0, 2).map(esc).join(" and ")}${beat.length > 2 ? ` and ${beat.length - 2} more` : ""}</p>` : ""}
       <div class="reveal-details">${detailsFormHTML(S.entries.get(F.id))}</div>
