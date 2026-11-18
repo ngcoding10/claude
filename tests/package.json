@@ -4,7 +4,8 @@
   "scripts": {
     "e2e:demo": "node e2e-demo.cjs",
     "e2e:live": "node e2e-live.cjs",
-    "schema": "node schema.test.mjs"
+    "schema": "node schema.test.mjs",
+    "e2e:torank": "node e2e-torank.cjs"
   },
   "devDependencies": {
     "@supabase/supabase-js": "2.45.4",
