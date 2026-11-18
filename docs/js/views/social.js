@@ -51,7 +51,7 @@ export async function renderNotifications(view) {
       const a = n.actor;
       if (!a) return "";
       const target = n.film_id != null ? `data-film="${n.film_id}"` : "";
-      const right = ["follow", "follow_accepted"].includes(n.kind) ? followBtnHTML(a) : n.film_id != null && film(n.film_id) ? `<button class="nposter" ${target}>${posterHTML(film(n.film_id))}</button>` : "";
+      const right = ["follow", "follow_accepted"].includes(n.kind) ? followBtnHTML(a) : n.film_id != null && film(n.film_id) ? `<button class="nposter" ${target}>${posterHTML(film(n.film_id), "s")}</button>` : "";
       return `<div class="note-row ${n.read ? "" : "unread"}"><a href="${userHref(a)}">${avatarHTML(a, 40)}</a>
         <div><a class="uname" href="${userHref(a)}">${esc(a.display_name || a.username)}</a> ${NOTE_TEXT[n.kind]?.(n) || ""}<small>${timeAgo(n.created_at)}</small></div>${right}</div>`;
     }).join("")}</div>` : reqs.length ? "" : emptyHTML({ title: "No notifications yet", text: "Likes, comments, new followers and recommendations show up here." })}`;

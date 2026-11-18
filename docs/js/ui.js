@@ -1,11 +1,11 @@
 import { $, esc, hash, ICON } from "./util.js";
-import { posterUrl } from "./films.js";
+import { film, posterUrl } from "./films.js";
 import { bucketForScore } from "./model.js";
 import { S, scoreOf, isWatch } from "./state.js";
 
-export function posterHTML(f) {
+export function posterHTML(f, size = "m") {
   const h = hash(f.title) % 360;
-  const img = f.poster ? `<img src="${esc(posterUrl(f))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+  const img = f.poster ? `<img src="${esc(posterUrl(f, size))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
   return `<div class="poster"><div class="fallback" aria-hidden="true" style="background:linear-gradient(160deg,hsl(${h} 45% 30%),hsl(${(h + 50) % 360} 55% 11%))">${esc(f.title)}<small>${f.year}</small></div>${img}</div>`;
 }
 
@@ -49,8 +49,20 @@ export function unlockIfClear() {
   if ($("#sheet").hidden && $("#modal").hidden && $("#flow").hidden) document.body.classList.remove("locked");
 }
 
+// Focus goes back to whatever opened a layer once it closes, so keyboard users keep their place.
+const returnFocus = new Map();
+function rememberFocus(id) {
+  if (!returnFocus.has(id) && document.activeElement && document.activeElement !== document.body) returnFocus.set(id, document.activeElement);
+}
+function restoreFocus(id) {
+  const el = returnFocus.get(id);
+  returnFocus.delete(id);
+  if (el && el.isConnected) el.focus({ preventScroll: true });
+}
+
 let modalClose = null;
 export function openModal(html, { onClose = null, wide = false } = {}) {
+  rememberFocus("#modal");
   const el = $("#modal");
   el.hidden = false;
   el.innerHTML = `<div class="scrim" data-act="modal-close"></div><div class="dialog ${wide ? "wide" : ""}" role="dialog" aria-modal="true"><button class="close" data-act="modal-close" aria-label="Close">${ICON.close}</button>${html}</div>`;
@@ -67,15 +79,18 @@ export function closeModal() {
   const fn = modalClose;
   modalClose = null;
   unlockIfClear();
+  restoreFocus("#modal");
   fn?.();
 }
 export const modalOpen = () => !$("#modal").hidden;
 
 export function openLayer(id, html) {
+  rememberFocus(id);
   const el = $(id);
   el.hidden = false;
   el.innerHTML = html;
   lock();
+  setTimeout(() => el.querySelector(".close, button")?.focus({ preventScroll: true }), 30);
   return el;
 }
 export function closeLayer(id) {
@@ -83,6 +98,7 @@ export function closeLayer(id) {
   el.hidden = true;
   el.innerHTML = "";
   unlockIfClear();
+  restoreFocus(id);
 }
 
 export function spinnerHTML(text = "") {
@@ -98,5 +114,17 @@ export function confirmDialog({ title, text, ok = "Confirm", danger = false }) {
       { onClose: () => { if (!answered) resolve(false); } },
     );
     $("#dlg-ok").addEventListener("click", () => { answered = true; closeModal(); resolve(true); });
+  });
+}
+
+// Fills in posters that arrived after a card was drawn (see films.js loadRestPosters).
+export function fillMissingPosters() {
+  document.querySelectorAll(".poster:not(:has(img))").forEach((el) => {
+    const host = el.closest("[data-film],[data-id]");
+    const id = Number(host?.dataset.film ?? host?.dataset.id);
+    const f = Number.isInteger(id) ? film(id) : null;
+    if (!f?.poster) return;
+    const small = el.closest(".rowi,.qa-row,.nposter,.crow,.mposter,.pposter");
+    el.insertAdjacentHTML("beforeend", `<img src="${esc(posterUrl(f, small ? "s" : "m"))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`);
   });
 }

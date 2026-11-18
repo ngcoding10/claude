@@ -17,7 +17,7 @@ export function renderToRank(body) {
     <section class="panel-card bulk">
       <h3>Add movies you've watched</h3>
       <p class="muted">Type or paste as many as you like — one per line or separated by commas. Rough titles are fine: “${esc(EXAMPLE)}”. ${live ? "Movi's AI figures out which films you mean." : ""} You can rank them later.</p>
-      <textarea id="bulk-text" class="note bulk-text" rows="5" placeholder="${esc(EXAMPLE)}">${esc(draft)}</textarea>
+      <textarea id="bulk-text" class="note bulk-text" rows="5" aria-label="Movies you've watched" placeholder="${esc(EXAMPLE)}">${esc(draft)}</textarea>
       <div class="bulk-acts"><button class="btn primary" data-act="bulk-match">${ICON.sparkle} Find my movies</button><span class="muted small" id="bulk-count"></span></div>
       <div id="bulk-review"></div>
     </section>
@@ -63,13 +63,13 @@ function drawReview() {
     const alts = it.alts.map((id) => film(id)).filter(Boolean);
     const series = it.series.map((id) => film(id)).filter(Boolean);
     return `<div class="match-row ${!f || (it.include && !s && !queued && !dup) ? "" : "off"}" data-i="${i}">
-      ${f ? `<button class="mposter" data-film="${f.id}" aria-label="${esc(f.title)}">${posterHTML(f)}</button>` : `<span class="mposter none">?</span>`}
+      ${f ? `<button class="mposter" data-film="${f.id}" aria-label="${esc(f.title)}">${posterHTML(f, "s")}</button>` : `<span class="mposter none">?</span>`}
       <div class="minfo">
         <div class="mtitle">${f ? `<b>${esc(f.title)}</b> <span class="muted">${f.year}</span> ${status}` : `<b>No match yet</b> <span class="muted">— search below or leave it out</span>`}</div>
         <small>You typed “${esc(it.text)}”${f ? ` · <button type="button" class="linkish" data-change="${i}" aria-expanded="${!!it.open}">${it.open ? "Done" : "Change"}</button>` : ""}</small>
         ${!f || it.open ? `<div class="mfix">
           ${alts.length ? `<select class="malt" data-i="${i}" aria-label="Pick a different film"><option value="">${f ? "Pick another…" : "Did you mean…"}</option>${alts.map((a) => `<option value="${a.id}">${esc(a.title)} (${a.year})</option>`).join("")}</select>` : ""}
-          <div class="msearch"><input type="search" class="msq" data-i="${i}" placeholder="Search for the right film" autocomplete="off"><div class="msr" data-i="${i}"></div></div>
+          <div class="msearch"><input type="search" class="msq" data-i="${i}" aria-label="Search for the right film" placeholder="Search for the right film" autocomplete="off"><div class="msr" data-i="${i}"></div></div>
         </div>` : ""}
         ${series.length ? `<label class="mseries"><input type="checkbox" data-series="${i}" ${it.addSeries ? "checked" : ""}><span>Also add the other ${series.length} in the series <span class="muted">· ${esc(series.slice(0, 3).map((x) => x.title).join(", "))}${series.length > 3 ? "…" : ""}</span></span></label>` : ""}
       </div>

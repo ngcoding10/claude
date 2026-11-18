@@ -14,7 +14,7 @@ export function listRowsHTML(rows, { showNote = true, owner = true } = {}) {
     const bits = [f.year, ...genreNames(f).slice(0, 2)];
     if (r.watched_where) bits.push(r.watched_where);
     if (r.rewatch) bits.push("Rewatch");
-    return `<button class="rowi" data-film="${f.id}"><span class="n">${r.overall}</span>${posterHTML(f)}
+    return `<button class="rowi" data-film="${f.id}"><span class="n">${r.overall}</span>${posterHTML(f, "s")}
       <span class="rinfo"><span class="t">${esc(f.title)}</span><span class="sub">${esc(bits.join(" · "))}</span>${showNote && r.note ? `<span class="rnote">“${esc(r.note.slice(0, 120))}${r.note.length > 120 ? "…" : ""}”</span>` : ""}</span>
       ${scoreHTML(r.score)}</button>`;
   }).join("") || emptyHTML({ title: owner ? "No matches" : "Nothing here", text: owner ? "Try clearing a filter." : "" });
@@ -51,7 +51,7 @@ export function listControlsHTML(rows, Q, id = "lc") {
   return `<div class="list-controls" id="${id}">
     <div class="chips" data-ctl="bucket">${["all", "loved", "fine", "disliked"].map((k) => `<button class="chip ${Q.bucket === k ? "on" : ""}" data-v="${k}">${k === "all" ? "All" : BUCKETS[k].short} · ${counts[k]}</button>`).join("")}</div>
     <div class="filters">
-      <input type="search" data-ctl="q" placeholder="Search this list" value="${esc(Q.q)}">
+      <input type="search" data-ctl="q" aria-label="Search this list" placeholder="Search this list" value="${esc(Q.q)}">
       <select data-ctl="genre" aria-label="Genre"><option value="">All genres</option>${gs.map((g) => `<option ${Q.genre === g ? "selected" : ""}>${esc(g)}</option>`).join("")}</select>
       <select data-ctl="decade" aria-label="Decade"><option value="">Any decade</option>${decs.map((d) => `<option value="${d}" ${Q.decade == d ? "selected" : ""}>${d}s</option>`).join("")}</select>
       <select data-ctl="year" aria-label="Year watched"><option value="">Any year watched</option>${years.map((y) => `<option value="${y}" ${Q.year == y ? "selected" : ""}>Watched in ${y}</option>`).join("")}</select>
@@ -117,7 +117,7 @@ async function renderRecs(body) {
     if (!f) return "";
     const s = scoreOf(f.id);
     return `<div class="rec" data-rec="${r.id}">
-      <button class="pposter" data-film="${f.id}">${posterHTML(f)}</button>
+      <button class="pposter" data-film="${f.id}">${posterHTML(f, "s")}</button>
       <div class="rec-body">
         <div class="rec-from">${avatarHTML(r.profile, 28)} ${r.profile ? nameHTML(r.profile) : "Someone"} <span class="muted">recommended · ${timeAgo(r.created_at)}</span></div>
         <button class="ftitle big" data-film="${f.id}">${esc(f.title)} <span class="muted">${f.year}</span></button>

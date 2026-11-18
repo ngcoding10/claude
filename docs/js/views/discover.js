@@ -132,7 +132,7 @@ export function renderSearch(view, params) {
   const decades = [];
   for (let d = 2020; d >= 1900; d -= 10) decades.push(d);
   view.innerHTML = `
-    <div class="searchbar">${ICON.search}<input id="q" type="search" placeholder="${SQ.tab === "films" ? `Search ${filmCount().toLocaleString()} films by title or year` : "Search people by name or username"}" autocomplete="off" value="${esc(SQ.q)}"></div>
+    <h1 class="sr-only">Search</h1><div class="searchbar">${ICON.search}<input id="q" type="search" aria-label="${SQ.tab === "films" ? "Search films" : "Search people"}" placeholder="${SQ.tab === "films" ? `Search ${filmCount().toLocaleString()} films by title or year` : "Search people by name or username"}" autocomplete="off" value="${esc(SQ.q)}"></div>
     <div class="seg" style="margin-top:14px" role="tablist">${["films", "people"].map((t) => `<button role="tab" class="${SQ.tab === t ? "on" : ""}" data-stab="${t}">${t === "films" ? "Films" : "People"}</button>`).join("")}</div>
     ${SQ.tab === "films" ? `<div class="filters">
       <select id="decade" aria-label="Decade"><option value="">Any decade</option>${decades.map((d) => `<option value="${d}" ${SQ.decade == d ? "selected" : ""}>${d}s</option>`).join("")}</select>

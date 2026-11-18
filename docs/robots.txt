@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://nicorgutierrez08-eng.github.io/claude/sitemap.xml

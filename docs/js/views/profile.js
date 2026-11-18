@@ -132,7 +132,7 @@ function compareHTML(rows, p, match) {
   const row = (c) => {
     const f = film(c.id);
     const d = Math.abs(c.them - c.me);
-    return `<button class="crow" data-film="${f.id}">${posterHTML(f)}<span class="t">${esc(f.title)}<small>${f.year}</small></span><span class="cs"><small>${name}</small>${scoreHTML(c.them)}</span><span class="cs"><small>You</small>${scoreHTML(c.me)}</span><span class="cd ${d < 1 ? "agree" : d > 3 ? "clash" : ""}">${d < 1 ? "Agree" : `±${d.toFixed(1)}`}</span></button>`;
+    return `<button class="crow" data-film="${f.id}">${posterHTML(f, "s")}<span class="t">${esc(f.title)}<small>${f.year}</small></span><span class="cs"><small>${name}</small>${scoreHTML(c.them)}</span><span class="cs"><small>You</small>${scoreHTML(c.me)}</span><span class="cd ${d < 1 ? "agree" : d > 3 ? "clash" : ""}">${d < 1 ? "Agree" : `±${d.toFixed(1)}`}</span></button>`;
   };
   const agree = [...common].sort((a, b) => Math.abs(a.them - a.me) - Math.abs(b.them - b.me)).slice(0, 8);
   const clash = [...common].sort((a, b) => Math.abs(b.them - b.me) - Math.abs(a.them - a.me)).filter((c) => Math.abs(c.them - c.me) >= 1.5).slice(0, 8);

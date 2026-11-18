@@ -1,10 +1,14 @@
 import { norm } from "./util.js";
+import { DATA_VERSION } from "./data-version.js";
+
+// Versioned URLs: the browser may reuse its copy without asking the server, until the data changes.
+const dataUrl = (path) => fetch(`data/${path}?v=${DATA_VERSION}`, { cache: "force-cache" });
 
 let DB = null;
 const shardCache = new Map();
 
 export async function loadFilms() {
-  const res = await fetch("data/index.json");
+  const res = await dataUrl("index.json");
   if (!res.ok) throw new Error(`index.json ${res.status}`);
   const raw = await res.json();
   DB = {
@@ -16,7 +20,18 @@ export async function loadFilms() {
   const counts = new Array(DB.genres.length).fill(0);
   DB.films.slice(0, 3000).forEach((f) => f.g.forEach((g) => counts[g]++));
   DB.genreFreq = counts.map((c) => Math.max(c, 1) / 3000);
+  DB.postersReady = loadRestPosters(raw.corePosters ?? DB.films.length);
   return DB;
+}
+
+// Posters beyond the most popular films arrive a moment after the first screen.
+async function loadRestPosters(core) {
+  if (core >= DB.films.length) return;
+  try {
+    const rest = await (await dataUrl("posters.json")).json();
+    rest.forEach((p, i) => { if (p && DB.films[core + i]) DB.films[core + i].poster = p; });
+    document.dispatchEvent(new CustomEvent("movi:posters"));
+  } catch {}
 }
 
 export const genreFreq = (name) => DB.genreFreq[DB.genres.indexOf(name)] ?? 0.05;
@@ -26,9 +41,10 @@ export const allFilms = () => DB.films;
 export const genres = () => DB.genres;
 export const film = (id) => DB.films[id];
 export const isFilmId = (id) => Number.isInteger(id) && id >= 0 && id < DB.films.length;
-const TMDB_IMG = "https://image.tmdb.org/t/p/w342";
-export const posterUrl = (f) =>
-  !f.poster ? "" : f.poster[0] === "~" ? TMDB_IMG + f.poster.slice(1) : f.poster.startsWith("http") ? f.poster : DB.posterBase + f.poster;
+// TMDB serves fixed widths; pick the smallest that stays sharp at 2x for where the poster is shown.
+const TMDB_SIZES = { s: "w185", m: "w342", l: "w500" };
+export const posterUrl = (f, size = "m") =>
+  !f.poster ? "" : f.poster[0] === "~" ? `https://image.tmdb.org/t/p/${TMDB_SIZES[size] || "w342"}${f.poster.slice(1)}` : f.poster.startsWith("http") ? f.poster : DB.posterBase + f.poster;
 export const genreNames = (f) => f.g.map((i) => DB.genres[i]);
 export const genreIndex = (name) => DB.genres.indexOf(name);
 
@@ -37,7 +53,7 @@ export function details(id) {
   if (!shardCache.has(n)) {
     shardCache.set(
       n,
-      fetch(`data/details/${n}.json`)
+      dataUrl(`details/${n}.json`)
         .then((r) => r.json())
         .catch(() => {
           shardCache.delete(n);

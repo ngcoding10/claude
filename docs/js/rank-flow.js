@@ -145,9 +145,9 @@ function render() {
     const dots = Array.from({ length: F.max }, (_, i) => `<i class="${i < F.comps ? "on" : ""}"></i>`).join("");
     body = `<h2>Which did you like more?</h2><p class="sub">Tap one, or use ← and →</p>
       <div class="center"><div class="duel">
-        <button class="pick" id="pick-new" data-act="pick-new">${posterHTML(f)}<div class="t">${esc(f.title)}</div><div class="y">${f.year}</div><span class="new">New</span></button>
+        <button class="pick" id="pick-new" data-act="pick-new">${posterHTML(f, "l")}<div class="t">${esc(f.title)}</div><div class="y">${f.year}</div><span class="new">New</span></button>
         <div class="vs">VS</div>
-        <button class="pick" id="pick-old" data-act="pick-old">${posterHTML(opp)}<div class="t">${esc(opp.title)}</div><div class="y">${opp.year} · your ${scoreOf(opp.id).score.toFixed(1)}</div></button>
+        <button class="pick" id="pick-old" data-act="pick-old">${posterHTML(opp, "l")}<div class="t">${esc(opp.title)}</div><div class="y">${opp.year} · your ${scoreOf(opp.id).score.toFixed(1)}</div></button>
       </div><div class="dots" aria-label="Comparison ${F.comps + 1} of about ${F.max}">${dots}</div></div>
       <div class="flow-foot"><button class="btn ghost sm" data-act="undo">${ICON.undo} Back</button><button class="btn sm" data-act="tie">Too close to call</button></div>`;
   } else if (F.step === "saving") {
@@ -165,6 +165,8 @@ function render() {
   }
   el.innerHTML = `<div class="flow-in">${top}${body}</div>`;
   el.scrollTop = 0;
+  // Each step replaces the screen; put keyboard focus on its first choice.
+  el.querySelector(".feel, #pick-new, .flow-foot .btn.primary")?.focus({ preventScroll: true });
   if (F.step === "done") {
     const form = $("#flow #details");
     bindWhereChips(form);
@@ -212,7 +214,7 @@ export function flowKey(e) {
 // ---------- Quick add: search any film and rank it ----------
 export function quickAdd() {
   const dlg = openModal(`<h2 class="dlg-title">Rank a film</h2>
-    <div class="searchbar">${ICON.search}<input id="qa" type="search" placeholder="Search ${filmCount().toLocaleString()} films" autocomplete="off"></div>
+    <div class="searchbar">${ICON.search}<input id="qa" type="search" aria-label="Search films to rank" placeholder="Search ${filmCount().toLocaleString()} films" autocomplete="off"></div>
     <div class="qa-results" id="qa-results"></div>
     <a class="qa-bulk" href="#/lists/torank" data-act="modal-close-nav">${ICON.list}<span><b>Seen a lot of movies?</b><small>Type them all at once and rank them later</small></span>${ICON.chevron}</a>`, { wide: true });
   const input = dlg.querySelector("#qa");
@@ -223,7 +225,7 @@ export function quickAdd() {
     out.innerHTML = (q ? "" : `<p class="muted qa-hint">Popular films you haven't ranked</p>`) + (films.length
       ? films.map((f) => {
           const s = scoreOf(f.id);
-          return `<button class="qa-row" data-act="qa-pick" data-id="${f.id}">${posterHTML(f)}<span><b>${esc(f.title)}</b><small>${f.year}${s ? " · in your list" : ""}</small></span>${s ? scoreHTML(s.score) : `<span class="qa-go">${ICON.rank}</span>`}</button>`;
+          return `<button class="qa-row" data-act="qa-pick" data-id="${f.id}">${posterHTML(f, "s")}<span><b>${esc(f.title)}</b><small>${f.year}${s ? " · in your list" : ""}</small></span>${s ? scoreHTML(s.score) : `<span class="qa-go">${ICON.rank}</span>`}</button>`;
         }).join("")
       : `<p class="muted qa-hint">No films match “${esc(q)}”.</p>`);
   };

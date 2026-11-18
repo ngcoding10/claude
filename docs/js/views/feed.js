@@ -85,12 +85,12 @@ export function postHTML(a) {
     <header>${avatarHTML(p, 42)}<div class="pwho">${nameHTML(p)} ${demoTag(p)}<span class="pverb">${verb}</span>${meta}</div>
       <span class="ptime">${timeAgo(a.created_at)}</span></header>
     <div class="pbody">
-      <button class="pposter" data-film="${f.id}" aria-label="${esc(f.title)}">${posterHTML(f)}</button>
+      <button class="pposter" data-film="${f.id}" aria-label="${esc(f.title)}">${posterHTML(f, "s")}</button>
       <div class="ptext">${a.kind === "ranked" ? `<div class="pscore">${scoreHTML(a.score, "lg")}</div>` : ""}${a.note ? `<p>“${esc(a.note)}”</p>` : ""}</div>
     </div>
     <footer>
-      <button class="pbtn like ${a.liked ? "on" : ""}" data-act="like" data-id="${a.id}" aria-pressed="${a.liked}" ${S.me ? "" : "disabled"}>${ICON.heart}<span>${a.likes || ""}</span></button>
-      <button class="pbtn" data-act="comments" data-id="${a.id}">${ICON.comment}<span>${a.comments || ""}</span></button>
+      <button class="pbtn like ${a.liked ? "on" : ""}" data-act="like" data-id="${a.id}" aria-pressed="${a.liked}" aria-label="Like (${a.likes || 0})" ${S.me ? "" : "disabled"}>${ICON.heart}<span>${a.likes || ""}</span></button>
+      <button class="pbtn" data-act="comments" data-id="${a.id}" aria-label="Comments (${a.comments || 0})">${ICON.comment}<span>${a.comments || ""}</span></button>
       ${saveBtn}
       ${mine ? `<button class="pbtn end" data-act="delete-post" data-id="${a.id}" aria-label="Delete post">${ICON.trash}</button>` : ""}
     </footer>
@@ -106,6 +106,7 @@ export async function toggleLike(btn) {
   btn.classList.toggle("on", on);
   btn.setAttribute("aria-pressed", on);
   span.textContent = n || "";
+  btn.setAttribute("aria-label", `Like (${n})`);
   try { await (on ? api.like(id) : api.unlike(id)); } catch (e) {
     btn.classList.toggle("on", !on);
     span.textContent = n - (on ? 1 : -1) || "";
@@ -128,7 +129,7 @@ async function drawComments(post) {
   const list = await api.getComments(id);
   const owner = post.querySelector(".delete-post, [data-act=delete-post]") !== null;
   box.innerHTML = list.map((c) => `<div class="cmt">${avatarHTML(c.profile, 28)}<div><b>${c.profile ? nameHTML(c.profile) : "Someone"}</b> ${esc(c.body)}<small>${timeAgo(c.created_at)}${c.user_id === S.me?.id || owner ? ` · <button class="linkish" data-act="del-comment" data-id="${c.id}">Delete</button>` : ""}</small></div></div>`).join("")
-    + (S.me ? `<form class="cmt-form"><input name="body" maxlength="500" placeholder="Add a comment…" autocomplete="off" required><button class="btn sm primary">Post</button></form>` : `<p class="muted">Sign in to comment.</p>`);
+    + (S.me ? `<form class="cmt-form"><input name="body" maxlength="500" aria-label="Add a comment" placeholder="Add a comment…" autocomplete="off" required><button class="btn sm primary">Post</button></form>` : `<p class="muted">Sign in to comment.</p>`);
   const form = box.querySelector("form");
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();

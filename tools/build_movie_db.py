@@ -4,12 +4,14 @@
 Usage: python3 tools/build_movie_db.py path/to/movies.json docs/data
 Source: https://github.com/prust/wikipedia-movie-data (CC BY-SA, from Wikipedia)
 """
+import hashlib
 import json
 import os
 import re
 import sys
 
 SHARD_SIZE = 500
+CORE_POSTERS = 3000
 POSTER_PREFIX = "https://upload.wikimedia.org/wikipedia/"
 
 GENRE_ALIASES = {"Sport": "Sports", "Sci-Fi": "Science Fiction", "Animation": "Animated"}
@@ -151,12 +153,27 @@ def main(src, out):
         )
 
     os.makedirs(os.path.join(out, "details"), exist_ok=True)
-    with open(os.path.join(out, "index.json"), "w", encoding="utf-8") as f:
-        json.dump({"genres": GENRES, "shard": SHARD_SIZE, "posterBase": POSTER_PREFIX, "films": index},
-                  f, ensure_ascii=False, separators=(",", ":"))
-    for n, rows in shards.items():
-        with open(os.path.join(out, "details", f"{n}.json"), "w", encoding="utf-8") as f:
-            json.dump(rows, f, ensure_ascii=False, separators=(",", ":"))
+    # Posters of the most popular films ship with the index so the first screen has them; the rest
+    # (random-looking file names that barely compress) load in the background from posters.json.
+    rest_posters = [row[3] for row in index[CORE_POSTERS:]]
+    for row in index[CORE_POSTERS:]:
+        row[3] = ""
+    written = []
+    def dump(path, data):
+        text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        written.append(text)
+    dump(os.path.join(out, "index.json"),
+         {"genres": GENRES, "shard": SHARD_SIZE, "posterBase": POSTER_PREFIX, "corePosters": CORE_POSTERS, "films": index})
+    dump(os.path.join(out, "posters.json"), rest_posters)
+    for n, rows in sorted(shards.items()):
+        dump(os.path.join(out, "details", f"{n}.json"), rows)
+    # A content hash in the data URLs lets browsers keep the files until a rebuild changes them.
+    version = hashlib.sha1("".join(written).encode("utf-8")).hexdigest()[:12]
+    js_dir = os.path.join(os.path.dirname(os.path.abspath(out)), "js")
+    with open(os.path.join(js_dir, "data-version.js"), "w", encoding="utf-8") as f:
+        f.write(f'// Written by tools/build_movie_db.py. Changes whenever the film data changes.\nexport const DATA_VERSION = "{version}";\n')
     print(f"{len(index)} films, {len(shards)} detail shards")
 
 

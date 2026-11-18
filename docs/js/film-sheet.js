@@ -80,7 +80,7 @@ export function closeFilm() {
 function sheetHTML(f, data = null, animate = true) {
   const det = data?.det;
   const s = S.me ? scoreOf(f.id) : null;
-  const img = posterUrl(f);
+  const img = posterUrl(f, "s");
   const anim = animate ? "" : ' style="animation:none"';
   const entry = S.me ? S.entries.get(f.id) : null;
 
@@ -134,7 +134,7 @@ function sheetHTML(f, data = null, animate = true) {
     <div class="panel" role="dialog" aria-modal="true" aria-label="${esc(f.title)}"${anim}>
       ${img ? `<div class="backdrop"><img src="${esc(img)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></div>` : ""}
       <button class="close" data-act="close-film" aria-label="Close">${ICON.close}</button>
-      <div class="film">${posterHTML(f)}
+      <div class="film">${posterHTML(f, "l")}
         <div class="body"><h2>${esc(f.title)}</h2>
           <div class="facts"><span class="tag">${f.year}</span>${genreNames(f).map((g) => `<span class="tag">${esc(g)}</span>`).join("")}</div>
           ${yours}<div class="acts">${acts}</div>${global}${plot}${cast}${wiki}</div></div>
@@ -149,8 +149,8 @@ export function detailsFormHTML(e, { compact = false } = {}) {
     <div class="drow"><label>Watched<input type="date" name="watched_on" value="${esc(e.watched_on || "")}" max="${today()}"></label>
       <label class="check"><input type="checkbox" name="rewatch" ${e.rewatch ? "checked" : ""}> ${ICON.repeat} Rewatch</label></div>
     <div class="chips wrap" role="group" aria-label="Where did you watch it?">${PLACES.map((p) => `<button type="button" class="chip ${e.watched_where === p ? "on" : ""}" data-where="${p}">${p}</button>`).join("")}</div>
-    <input type="text" name="watched_with" maxlength="120" placeholder="Who did you watch it with?" value="${esc(e.watched_with || "")}">
-    <textarea class="note" name="note" maxlength="2000" placeholder="Add a note — what stuck with you?">${esc(e.note || "")}</textarea>
+    <input type="text" name="watched_with" maxlength="120" aria-label="Who did you watch it with?" placeholder="Who did you watch it with?" value="${esc(e.watched_with || "")}">
+    <textarea class="note" name="note" maxlength="2000" aria-label="Note" placeholder="Add a note — what stuck with you?">${esc(e.note || "")}</textarea>
   </form>`;
 }
 
@@ -202,7 +202,7 @@ export async function recommendDialog(filmId) {
   const dlg = openModal(`<h2 class="dlg-title">Recommend ${esc(f.title)}</h2>
     <p class="muted">They'll get a notification and it'll show up in their Recs.</p>
     <div class="pick-people">${people.map((x) => `<label class="pp">${avatarHTML(x.profile, 36)}<span>${esc(x.profile.display_name || x.profile.username)}<small>@${esc(x.profile.username)}</small></span><input type="checkbox" value="${esc(x.id)}"></label>`).join("")}</div>
-    <textarea class="note" id="rec-msg" maxlength="280" placeholder="Why should they watch it? (optional)"></textarea>
+    <textarea class="note" id="rec-msg" maxlength="280" aria-label="Message" placeholder="Why should they watch it? (optional)"></textarea>
     <div class="dlg-acts"><button class="btn" data-act="modal-close">Cancel</button><button class="btn primary" id="rec-send">${ICON.send} Send</button></div>`);
   dlg.querySelector("#rec-send").addEventListener("click", async () => {
     const ids = [...dlg.querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value);

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page not found · Movi</title>
+  <meta name="robots" content="noindex">
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #161616; color: #f2f0ee; font: 16px/1.5 system-ui, -apple-system, sans-serif; text-align: center; padding: 16px; }
+    a { color: #ff8589; font-weight: 600; }
+  </style>
+  <script>
+    // Movi lives at one page; send stray links (for example /claude/u/name) to the matching in-app page.
+    (function () {
+      var base = "/claude/";
+      var rest = location.pathname.indexOf(base) === 0 ? location.pathname.slice(base.length) : "";
+      location.replace(base + (rest ? "#/" + rest.replace(/\/+$/, "") : ""));
+    })();
+  </script>
+</head>
+<body>
+  <p>That page doesn't exist. <a href="/claude/">Go to Movi</a></p>
+</body>
+</html>
