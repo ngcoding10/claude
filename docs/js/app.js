@@ -1,7 +1,7 @@
 import { $, esc, ICON, toast } from "./util.js";
 import { loadFilms, film, isFilmId } from "./films.js";
 import { initApi, api } from "./api/index.js";
-import { S, rankedIds, removeBacklog, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
+import { S, rankedIds, removeBacklog, updateMe, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
 import { avatarHTML, closeModal, modalOpen, confirmDialog, spinnerHTML, emptyHTML } from "./ui.js";
 import { openFilm, closeFilm, refreshFilm, recommendDialog, shareFilm, sheetFilmId } from "./film-sheet.js";
 import { startRank, startQueue, cancelRank, flowActive, flowAction, flowKey, quickAdd, quickPick, requireMe, setFlowDoneHandler } from "./rank-flow.js";
@@ -11,7 +11,7 @@ import { renderDiscover, renderSearch, drawResults, moreResults, refreshQuick, s
 import { renderLists, shareList } from "./views/lists.js";
 import { renderProfile, showFollows, shareProfile } from "./views/profile.js";
 import { renderLeaderboard, renderNotifications, renderPeople, renderTogether, handleRequest } from "./views/social.js";
-import { renderWelcome, renderOnboarding, onboardingNext, onboardingDone, renderSettings, exportData, deleteAccount, forgotPassword, needsOnboarding } from "./views/account.js";
+import { signInWithGoogle, renderWelcome, renderOnboarding, onboardingNext, onboardingDone, renderSettings, exportData, deleteAccount, forgotPassword, needsOnboarding } from "./views/account.js";
 
 const view = () => $("#view");
 
@@ -235,6 +235,7 @@ async function act(name, el) {
     case "ob-done": return onboardingDone();
     case "export": return exportData();
     case "forgot": return forgotPassword();
+    case "google": return signInWithGoogle(el);
     case "sign-out":
       await api.signOut();
       clearSession();
@@ -298,7 +299,18 @@ async function boot() {
     return;
   }
   api.onChange = () => refreshUnread();
+  // A failed Google sign-in comes back as #error=...&error_description=...
+  const authError = new URLSearchParams(location.hash.replace(/^#/, "")).get("error_description");
+  if (authError) {
+    history.replaceState(null, "", location.pathname);
+    toast(/provider is not enabled/i.test(authError) ? "Google sign-in isn't switched on yet" : `Sign-in failed: ${authError.replace(/\+/g, " ")}`);
+  }
   await loadSession().catch(() => clearSession());
+  if (S.me && S.me.display_name === S.me.username) {
+    const meta = await api.userMeta().catch(() => null);
+    const name = (meta?.full_name || meta?.name || "").trim().slice(0, 40);
+    if (name) await updateMe({ display_name: name }).catch(() => {});
+  }
   // New members land on onboarding from the home page only; a link to a specific page is respected.
   const atHome = ["", "#", "#/", "#/feed"].includes(location.hash);
   if (S.me && atHome && needsOnboarding() && S.me.ranked_count === 0 && !S.backlog.length) location.hash = "#/onboarding";

@@ -1,7 +1,7 @@
 // Picks the backend. Fill in docs/config.js to switch from demo mode to Supabase.
 //
 // Contract shared by api/demo.js and api/supabase.js (all methods async):
-//   auth:     uid, signUp, signIn, signOut, resetPassword, updatePassword, usernameAvailable, deleteAccount
+//   auth:     uid, signUp, signIn, signInWithGoogle, supportsGoogle, userMeta, signOut, resetPassword, updatePassword, usernameAvailable, deleteAccount
 //   profiles: getProfile, getProfileByUsername, updateProfile, searchUsers, listProfiles
 //   rankings: getRankings, rankingsOfUsers, rankingsForFilm, saveLists, updateEntry
 //   watch:    getWatchlist, addWatch, removeWatch

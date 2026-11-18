@@ -187,6 +187,9 @@ export async function createDemoApi() {
       uid = entry[0];
       try { localStorage.setItem(SESSION, uid); } catch {}
     },
+    supportsGoogle: false,
+    async signInWithGoogle() { throw new Error("Google sign-in needs the live server. Connect Supabase in config.js first."); },
+    async userMeta() { return null; },
     async signOut() { uid = null; try { localStorage.removeItem(SESSION); } catch {} },
     async resetPassword() { throw new Error("Password reset needs a server. In demo mode, create a new account instead."); },
     async updatePassword(password) {

@@ -80,6 +80,12 @@ export async function createSupabaseApi({ url, anonKey }) {
       if (error) throw new Error(error.message === "Invalid login credentials" ? "Wrong email or password" : error.message);
       uid = data.user.id;
     },
+    supportsGoogle: true,
+    async signInWithGoogle() {
+      const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
+      if (error) throw new Error(error.message);
+    },
+    async userMeta() { return (await sb.auth.getUser()).data.user?.user_metadata ?? null; },
     async signOut() { await sb.auth.signOut(); uid = null; },
     async resetPassword(email) {
       check(await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname + "#/settings" }));
