@@ -3,7 +3,7 @@ import { film, searchFilms, filmCount } from "./films.js";
 import { BUCKETS, ORDER } from "./model.js";
 import { api } from "./api/index.js";
 import { S, scoreOf, rankedCount, detachRanking, restoreLists, commitRanking, updateDetails } from "./state.js";
-import { posterHTML, openLayer, closeLayer, openModal, closeModal, scoreHTML } from "./ui.js";
+import { posterHTML, openLayer, closeLayer, openModal, closeModal, scoreHTML, reduceMotion } from "./ui.js";
 import { detailsFormHTML, readDetails, bindWhereChips } from "./film-sheet.js";
 
 let F = null;
@@ -17,11 +17,7 @@ export function startQueue(ids) {
   queueTotal = ids.length;
   startRank(ids[0]);
 }
-function nextInQueue() {
-  const id = queue.shift();
-  if (id == null) { queueTotal = 0; return; }
-  setTimeout(() => startRank(id), 180);
-}
+
 let onDone = null;
 
 export const flowActive = () => !!F;
@@ -48,9 +44,9 @@ function skipInQueue() {
   if (!F) return;
   restoreLists(F.prev);
   F = null;
+  if (queue.length) return startRank(queue.shift());
+  queueTotal = 0;
   closeLayer("#flow");
-  if (queue.length) nextInQueue();
-  else queueTotal = 0;
 }
 
 function chooseBucket(b) {
@@ -75,6 +71,7 @@ function pick(newIsBetter, tie = false) {
   const next = () => (F.lo >= F.hi ? finish() : render());
   if (tie) return next();
   F.busy = true;
+  navigator.vibrate?.(8);
   $(newIsBetter ? "#pick-new" : "#pick-old")?.classList.add("chosen");
   $(newIsBetter ? "#pick-old" : "#pick-new")?.classList.add("lost");
   setTimeout(() => { if (F) { F.busy = false; next(); } }, 260);
@@ -113,8 +110,10 @@ async function complete(next = null) {
   const f = F;
   const form = $("#flow #details");
   const det = form ? readDetails(form) : null;
+  // In "Rank all, one by one" the ranking screen stays open and moves straight to the next film.
+  const continuing = next !== "another" && queue.length > 0;
   F = null;
-  closeLayer("#flow");
+  if (!continuing) closeLayer("#flow");
   if (det) await updateDetails(f.id, det);
   if (!f.wasRanked || f.prevBucket !== f.bucket) {
     const s = scoreOf(f.id);
@@ -122,7 +121,7 @@ async function complete(next = null) {
   }
   onDone?.(f.id);
   if (next === "another") { queue = []; queueTotal = 0; quickAdd(); }
-  else if (queue.length) nextInQueue();
+  else if (continuing) startRank(queue.shift());
   else queueTotal = 0;
 }
 
@@ -175,6 +174,8 @@ function render() {
 }
 
 function sparks() {
+  navigator.vibrate?.([12, 40, 18]);
+  if (reduceMotion()) return;
   const colors = ["#e5484d", "#ff8589", "#f2f0ee", "#6fdcb0"];
   for (let i = 0; i < 28; i++) {
     const s = document.createElement("i");

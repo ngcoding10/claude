@@ -45,6 +45,7 @@ export function userRowHTML(p, right = "", sub = "") {
 
 // ---------- Layers: film sheet (#sheet), dialog (#modal), ranking flow (#flow) ----------
 function lock() { document.body.classList.add("locked"); }
+export { reduceMotion };
 export function unlockIfClear() {
   if ($("#sheet").hidden && $("#modal").hidden && $("#flow").hidden) document.body.classList.remove("locked");
 }
@@ -60,10 +61,32 @@ function restoreFocus(id) {
   if (el && el.isConnected) el.focus({ preventScroll: true });
 }
 
+// Layers slide out briefly before they hide; reopening during that moment cancels it.
+const closing = new Map();
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+function hideLayer(el, after) {
+  const finish = () => {
+    closing.delete(el.id);
+    el.classList.remove("closing");
+    el.hidden = true;
+    el.innerHTML = "";
+    after?.();
+  };
+  if (reduceMotion()) return finish();
+  el.classList.add("closing");
+  closing.set(el.id, setTimeout(finish, 180));
+}
+function cancelHide(el) {
+  clearTimeout(closing.get(el.id));
+  closing.delete(el.id);
+  el.classList.remove("closing");
+}
+
 let modalClose = null;
 export function openModal(html, { onClose = null, wide = false } = {}) {
   rememberFocus("#modal");
   const el = $("#modal");
+  cancelHide(el);
   el.hidden = false;
   el.innerHTML = `<div class="scrim" data-act="modal-close"></div><div class="dialog ${wide ? "wide" : ""}" role="dialog" aria-modal="true"><button class="close" data-act="modal-close" aria-label="Close">${ICON.close}</button>${html}</div>`;
   modalClose = onClose;
@@ -73,20 +96,19 @@ export function openModal(html, { onClose = null, wide = false } = {}) {
 }
 export function closeModal() {
   const el = $("#modal");
-  if (el.hidden) return;
-  el.hidden = true;
-  el.innerHTML = "";
+  if (el.hidden || closing.has(el.id)) return;
   const fn = modalClose;
   modalClose = null;
-  unlockIfClear();
+  hideLayer(el, unlockIfClear);
   restoreFocus("#modal");
   fn?.();
 }
-export const modalOpen = () => !$("#modal").hidden;
+export const modalOpen = () => !$("#modal").hidden && !closing.has("modal");
 
 export function openLayer(id, html) {
   rememberFocus(id);
   const el = $(id);
+  cancelHide(el);
   el.hidden = false;
   el.innerHTML = html;
   lock();
@@ -95,9 +117,8 @@ export function openLayer(id, html) {
 }
 export function closeLayer(id) {
   const el = $(id);
-  el.hidden = true;
-  el.innerHTML = "";
-  unlockIfClear();
+  if (el.hidden || closing.has(el.id)) return;
+  hideLayer(el, unlockIfClear);
   restoreFocus(id);
 }
 

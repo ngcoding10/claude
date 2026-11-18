@@ -74,6 +74,12 @@ async function draw(c, keepScroll = false) {
     v.innerHTML = emptyHTML({ title: "Something went wrong", text: esc(e.message), action: `<button class="btn" onclick="location.reload()">Reload</button>` });
   }
   if (keepScroll) scrollTo(0, y);
+  else {
+    // A short fade-up when switching screens; soft refreshes keep content still.
+    v.classList.remove("enter");
+    void v.offsetWidth;
+    v.classList.add("enter");
+  }
 }
 
 const go = (hash) => { if (location.hash === hash) route(); else location.hash = hash; };
