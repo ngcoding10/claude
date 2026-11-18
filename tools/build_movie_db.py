@@ -21,6 +21,7 @@ GENRES = [
     "Political", "Independent", "Silent", "Short",
 ]
 GENRE_INDEX = {g: i for i, g in enumerate(GENRES)}
+DEFINING = ["Animated", "Superhero", "Documentary", "Horror", "Science Fiction", "Western", "Musical", "War", "Noir", "Fantasy", "Sports"]
 
 BOOSTS = [
     (r"greatest films", 6), (r"Best Picture", 5), (r"highest-grossing", 4),
@@ -77,10 +78,34 @@ def clean_extract(text, limit=700):
     return cut[: end + 1] if end > 200 else cut.rstrip() + "…"
 
 
+TMDB_GENRES = {
+    28: "Action", 12: "Adventure", 16: "Animated", 35: "Comedy", 80: "Crime", 99: "Documentary", 18: "Drama",
+    10751: "Family", 14: "Fantasy", 36: "Historical", 27: "Horror", 10402: "Musical", 9648: "Mystery",
+    10749: "Romance", 878: "Science Fiction", 53: "Thriller", 10752: "War", 37: "Western",
+}
+
+
 def load_tmdb():
-    # Poster paths from tools/fetch_tmdb_posters.py; stored as "~/path.jpg" and served from TMDB's image CDN.
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmdb_posters.json")
-    return json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
+    # From tools/fetch_tmdb_posters.py: {"Title|Year": {"p": poster, "g": [genre ids], "o": overview}}.
+    # Older caches (tmdb_posters.json: {"Title|Year": poster}) fill any posters the newer one lacks.
+    here = os.path.dirname(os.path.abspath(__file__))
+    data = {}
+    legacy = os.path.join(here, "tmdb_posters.json")
+    if os.path.exists(legacy):
+        data = {k: {"p": v} for k, v in json.load(open(legacy, encoding="utf-8")).items() if v}
+    current = os.path.join(here, "tmdb_data.json")
+    if os.path.exists(current):
+        for k, v in json.load(open(current, encoding="utf-8")).items():
+            merged = {**data.get(k, {}), **{key: val for key, val in v.items() if val}}
+            data[k] = merged
+    return data
+
+
+def best_plot(extract, overview):
+    plot = clean_extract(extract)
+    if overview and len(plot) < 120 and len(overview) > len(plot):
+        return clean_extract(overview)
+    return plot
 
 
 def main(src, out):
@@ -95,8 +120,13 @@ def main(src, out):
             continue
         seen.add(key)
         genres = []
-        for g in m.get("genres", []):
-            g = GENRE_ALIASES.get(g, g)
+        # TMDB's genres are the more reliable, so they come first; Wikipedia adds finer ones (Superhero, Noir...).
+        tm = tmdb.get(f"{m['title']}|{m['year']}", {})
+        names = [TMDB_GENRES[g] for g in tm.get("g", []) if g in TMDB_GENRES] + list(m.get("genres", []))
+        names = [GENRE_ALIASES.get(g, g) for g in names]
+        # Genres that say the most about a film are listed first, since cards show only the first two.
+        names = [g for g in DEFINING if g in names] + [g for g in names if g not in DEFINING]
+        for g in names:
             if g in GENRE_INDEX and GENRE_INDEX[g] not in genres:
                 genres.append(GENRE_INDEX[g])
         films.append((popularity(m) + canon_bonus(m, canon), m, genres))
@@ -107,8 +137,9 @@ def main(src, out):
     index, shards = [], {}
     for fid, (pop, m, genres) in enumerate(films):
         poster = m.get("thumbnail") or ""
-        if tmdb.get(f"{m['title']}|{m['year']}"):
-            poster = "~" + tmdb[f"{m['title']}|{m['year']}"]
+        tm = tmdb.get(f"{m['title']}|{m['year']}", {})
+        if tm.get("p"):
+            poster = "~" + tm["p"]
         if "/thumb/" in poster:
             # Wikimedia only serves thumbnails at standard widths; 320px now returns 400.
             poster = re.sub(r"/\d+px-([^/]+)$", r"/330px-\1", poster)
@@ -116,7 +147,7 @@ def main(src, out):
             poster = poster[len(POSTER_PREFIX):]
         index.append([m["title"], m["year"], genres, poster, round(max(pop, 0) / top * 100)])
         shards.setdefault(fid // SHARD_SIZE, []).append(
-            [m.get("cast", [])[:10], clean_extract(m.get("extract")), m.get("href") or ""]
+            [m.get("cast", [])[:10], best_plot(m.get("extract"), tm.get("o")), m.get("href") or ""]
         )
 
     os.makedirs(os.path.join(out, "details"), exist_ok=True)

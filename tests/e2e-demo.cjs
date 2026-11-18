@@ -7,6 +7,8 @@ const log = (...a) => console.log(...a);
 (async () => {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  // Always run in demo mode, whatever docs/config.js points at, so tests never touch a real project.
+  await ctx.route('**/config.js', r => r.fulfill({ contentType: 'application/javascript', body: 'window.MOVI_CONFIG={};' }));
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));

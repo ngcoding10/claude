@@ -1,10 +1,11 @@
 import { $, esc, ICON, toast } from "./util.js";
 import { loadFilms, film, isFilmId } from "./films.js";
 import { initApi, api } from "./api/index.js";
-import { S, rankedIds, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
+import { S, rankedIds, removeBacklog, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
 import { avatarHTML, closeModal, modalOpen, confirmDialog, spinnerHTML, emptyHTML } from "./ui.js";
 import { openFilm, closeFilm, refreshFilm, recommendDialog, shareFilm, sheetFilmId } from "./film-sheet.js";
-import { startRank, cancelRank, flowActive, flowAction, flowKey, quickAdd, quickPick, requireMe, setFlowDoneHandler } from "./rank-flow.js";
+import { startRank, startQueue, cancelRank, flowActive, flowAction, flowKey, quickAdd, quickPick, requireMe, setFlowDoneHandler } from "./rank-flow.js";
+import { runMatch, addReviewed, clearReview } from "./views/torank.js";
 import { renderFeed, feedMore, toggleLike, toggleComments, deleteComment, followBtnHTML } from "./views/feed.js";
 import { renderDiscover, renderSearch, drawResults, moreResults, refreshQuick, shuffleQuick } from "./views/discover.js";
 import { renderLists, shareList } from "./views/lists.js";
@@ -78,7 +79,10 @@ async function draw(c, keepScroll = false) {
 const go = (hash) => { if (location.hash === hash) route(); else location.hash = hash; };
 const rerender = () => current && draw(current, true);
 
+// Navigation before startup finishes is picked up by boot()'s own route() call, once the session is known.
+let booted = false;
 window.addEventListener("hashchange", () => {
+  if (!booted) return;
   if (flowActive()) cancelRank();
   closeModal();
   if (!location.hash.startsWith("#/film/")) {
@@ -182,6 +186,15 @@ async function act(name, el) {
       return;
     }
     case "shuffle-quick": return shuffleQuick();
+    case "bulk-match": {
+      el.disabled = true;
+      try { await runMatch(); } finally { el.disabled = false; }
+      return;
+    }
+    case "bulk-add": await addReviewed(); return rerender();
+    case "bulk-clear": clearReview(); return rerender();
+    case "unbacklog": await removeBacklog(id); toast("Removed from To rank"); return rerender();
+    case "rank-queue": if (requireMe()) startQueue(S.backlog.map((b) => b.film_id)); return;
     case "feed-more": return feedMore();
     case "more": return moreResults();
     case "follow": {
@@ -286,11 +299,14 @@ async function boot() {
   }
   api.onChange = () => refreshUnread();
   await loadSession().catch(() => clearSession());
-  if (S.me && needsOnboarding() && S.me.ranked_count === 0 && !location.hash.startsWith("#/onboarding") && !location.hash.startsWith("#/film/")) location.hash = "#/onboarding";
+  // New members land on onboarding from the home page only; a link to a specific page is respected.
+  const atHome = ["", "#", "#/", "#/feed"].includes(location.hash);
+  if (S.me && atHome && needsOnboarding() && S.me.ranked_count === 0 && !S.backlog.length) location.hash = "#/onboarding";
   if (api.takeRecovery?.() && S.me) {
     location.hash = "#/settings";
     toast("Choose a new password below");
   }
+  booted = true;
   await route();
   setInterval(() => { if (document.visibilityState === "visible") refreshUnread(); }, 40000);
 }

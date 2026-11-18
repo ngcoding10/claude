@@ -440,6 +440,23 @@ export async function createDemoApi() {
       return [...all.values()].filter((e) => e.n >= minCount).sort((a, b) => b.avg_score - a.avg_score || b.n - a.n).slice(0, limit);
     },
 
+    async getBacklog() { return clone(((w.backlog ||= {})[uid] || []).slice()); },
+    async addBacklog(ids) {
+      requireUser();
+      const list = ((w.backlog ||= {})[uid] ||= []);
+      const have = new Set(list.map((r) => r.film_id));
+      const now = Date.now();
+      ids.forEach((film_id, i) => { if (!have.has(film_id)) list.unshift({ film_id, created_at: iso(now - i) }); });
+      save();
+    },
+    async removeBacklog(id) {
+      const list = (w.backlog ||= {})[uid] || [];
+      w.backlog[uid] = list.filter((r) => r.film_id !== id);
+      save();
+    },
+    backlogLocal: false,
+    async matchTitles() { return null; },
+
     resetDemo() { localStorage.removeItem(KEY); localStorage.removeItem(SESSION); },
   };
   return api;

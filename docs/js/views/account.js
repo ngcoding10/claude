@@ -126,7 +126,7 @@ export async function renderOnboarding(view) {
     view.innerHTML = `<div class="ob">${steps}
       <h1>Rank 3 films you've seen</h1>
       <p class="muted">Pick films you know well. ${n ? `<b>${Math.min(n, 3)} of 3 done.</b>` : "It takes a few seconds each."}</p>
-      <div class="row-c"><button class="btn" data-act="quick-add">${ICON.search} Search for a film</button>${n >= 3 ? `<button class="btn primary" data-act="ob-next">Next: find friends ${ICON.chevron}</button>` : `<button class="btn ghost" data-act="ob-next">Skip for now</button>`}</div>
+      <div class="row-c"><button class="btn" data-act="quick-add">${ICON.search} Search for a film</button><a class="btn" href="#/lists/torank">${ICON.list} Paste a list of movies</a>${n >= 3 ? `<button class="btn primary" data-act="ob-next">Next: find friends ${ICON.chevron}</button>` : `<button class="btn ghost" data-act="ob-next">Skip for now</button>`}</div>
       <div class="grid quick" style="margin-top:22px">${picks.map((f) => cardHTML(f, { acts: `<div class="acts"><button data-act="rank" data-id="${f.id}">Seen it</button><button data-act="skip" data-id="${f.id}">Not seen</button></div>` })).join("")}</div></div>`;
     return;
   }

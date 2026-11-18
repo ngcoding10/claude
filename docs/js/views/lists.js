@@ -3,6 +3,7 @@ import { film, genres, genreNames } from "../films.js";
 import { BUCKETS } from "../model.js";
 import { api } from "../api/index.js";
 import { S, myRows, rankedCount, scoreOf } from "../state.js";
+import { renderToRank } from "./torank.js";
 import { posterHTML, cardHTML, scoreHTML, emptyHTML, avatarHTML, nameHTML, spinnerHTML } from "../ui.js";
 
 const LQ = { bucket: "all", genre: "", decade: "", sort: "rank", q: "", year: "" };
@@ -71,17 +72,18 @@ export function bindListControls(root, Q, redraw) {
 }
 
 export async function renderLists(view, tab = "been") {
-  const tabs = { been: `Been · ${rankedCount()}`, want: `Want to watch · ${S.watch.length}`, recs: "Recs for you" };
+  const tabs = { been: `Been · ${rankedCount()}`, torank: `To rank · ${S.backlog.length}`, want: `Want to watch · ${S.watch.length}`, recs: "Recs for you" };
   view.innerHTML = `<div class="list-head"><div><h1>My Lists</h1></div>
       <div class="settings"><button class="btn sm" data-act="share-list">${ICON.share} Share top 10</button><button class="btn sm primary" data-act="quick-add">${ICON.plus} Rank a film</button></div></div>
     <div class="seg big" role="tablist">${Object.entries(tabs).map(([k, v]) => `<a role="tab" class="${tab === k ? "on" : ""}" href="#/lists/${k}">${v}</a>`).join("")}</div>
     <div id="list-body"></div>`;
   const body = $("#list-body");
+  if (tab === "torank") return renderToRank(body);
   if (tab === "want") return renderWant(body);
   if (tab === "recs") return renderRecs(body);
   const rows = myRows();
   if (!rows.length) {
-    body.innerHTML = emptyHTML({ title: "Your list is empty", text: "Rank a film you've seen and it lands here with a score.", action: `<button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button>` });
+    body.innerHTML = emptyHTML({ title: "Your list is empty", text: "Rank a film you've seen and it lands here with a score. Seen a lot? Add them all at once and rank later.", action: `<div class="row-c"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button><a class="btn" href="#/lists/torank">Add many at once</a></div>` });
     return;
   }
   body.innerHTML = listControlsHTML(rows, LQ) + `<div class="rows" id="rows"></div>`;

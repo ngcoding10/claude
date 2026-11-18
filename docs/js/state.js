@@ -10,6 +10,7 @@ export const S = {
   lists: blankLists(),
   entries: new Map(),
   watch: [],
+  backlog: [],
   following: new Map(),
   followers: [],
   friendRows: null,
@@ -32,6 +33,7 @@ export async function loadSession() {
   S.lists = listsFromRows(rows);
   S.entries = new Map(rows.map((r) => [r.film_id, r]));
   S.watch = watch;
+  S.backlog = await api.getBacklog().catch(() => []);
   S.following = new Map(follows.following.map((f) => [f.id, f.status]));
   S.followers = follows.followers;
   S.friendRows = null;
@@ -42,7 +44,7 @@ export async function loadSession() {
 }
 
 export function clearSession() {
-  Object.assign(S, { me: null, lists: blankLists(), entries: new Map(), watch: [], following: new Map(), followers: [], friendRows: null, matches: new Map(), unread: 0, skip: new Set() });
+  Object.assign(S, { me: null, lists: blankLists(), entries: new Map(), watch: [], backlog: [], following: new Map(), followers: [], friendRows: null, matches: new Map(), unread: 0, skip: new Set() });
   return null;
 }
 
@@ -109,6 +111,7 @@ export async function commitRanking({ filmId, bucket, index, prev }) {
   const entry = { note: "", watched_on: null, watched_where: "", watched_with: "", rewatch: false, created_at: now, ...S.entries.get(filmId), film_id: filmId };
   S.entries.set(filmId, entry);
   if (isWatch(filmId)) await removeWatch(filmId, true);
+  if (inBacklog(filmId)) await removeBacklog(filmId);
   S.skip.delete(filmId);
   saveSkip();
 }
@@ -197,4 +200,20 @@ export async function refreshUnread() {
 export async function updateMe(patch) {
   S.me = await api.updateProfile(patch);
   return S.me;
+}
+
+export const inBacklog = (id) => S.backlog.some((b) => b.film_id === id);
+
+export async function addBacklog(ids) {
+  const fresh = [...new Set(ids)].filter((id) => !inBacklog(id) && !scoreOf(id));
+  if (!fresh.length) return 0;
+  await api.addBacklog(fresh);
+  const now = Date.now();
+  S.backlog = [...fresh.map((film_id, i) => ({ film_id, created_at: new Date(now - i).toISOString() })), ...S.backlog];
+  return fresh.length;
+}
+
+export async function removeBacklog(id) {
+  S.backlog = S.backlog.filter((b) => b.film_id !== id);
+  try { await api.removeBacklog(id); } catch (e) { toast("Couldn't update your To rank list: " + e.message); }
 }

@@ -34,9 +34,9 @@ export async function renderDiscover(view) {
     : n === 0
       ? `<div class="hero"><h1>Let's build your list, <em>${esc(me.display_name || me.username)}</em>.</h1>
           <p>Start with films you know well. Each one takes a few seconds: a gut check, then a couple of head-to-heads.</p>
-          <div class="row"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button><a class="btn" href="#quick">Quick picks</a></div></div>`
+          <div class="row"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button><a class="btn" href="#/lists/torank">${ICON.list} Add movies you've seen</a></div></div>`
       : `<div class="hero compact"><div><h1>Discover</h1><p>${rankedCount()} ranked · ${avgScore().toFixed(1)} average. Find your next favorite.</p></div>
-          <div class="row"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button><a class="btn" href="#/together">${ICON.users} Watch together</a></div></div>`;
+          <div class="row"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button>${S.backlog.length ? `<a class="btn" href="#/lists/torank">${ICON.list} ${S.backlog.length} to rank</a>` : `<a class="btn" href="#/lists/torank">${ICON.list} Add movies you've seen</a>`}<a class="btn" href="#/together">${ICON.users} Watch together</a></div></div>`;
 
   beginPage();
   if (me) pickQuick();

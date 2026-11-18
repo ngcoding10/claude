@@ -2,6 +2,25 @@
 const PROFILE = "id,username,display_name,bio,avatar_hue,is_private,yearly_goal,ranked_count,created_at";
 const RANKING = "user_id,film_id,bucket,pos,score,note,watched_on,watched_where,watched_with,rewatch,created_at,updated_at";
 
+const missingTable = (e) => e.code === "42P01" || e.code === "PGRST205" || /backlog/.test(e.message || "") && /exist|schema cache/.test(e.message || "");
+
+export function localBacklog(uid) {
+  const key = `movi.backlog.${uid}`;
+  const read = () => { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; } };
+  const write = (rows) => { try { localStorage.setItem(key, JSON.stringify(rows)); } catch {} };
+  return {
+    get: () => read(),
+    add: (ids) => {
+      const rows = read();
+      const have = new Set(rows.map((r) => r.film_id));
+      const now = Date.now();
+      ids.forEach((film_id, i) => { if (!have.has(film_id)) rows.unshift({ film_id, created_at: new Date(now - i).toISOString() }); });
+      write(rows);
+    },
+    remove: (id) => write(read().filter((r) => r.film_id !== id)),
+  };
+}
+
 function check({ data, error }) {
   if (error) throw new Error(error.message);
   return data;
@@ -13,6 +32,7 @@ export async function createSupabaseApi({ url, anonKey }) {
   const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
   let uid = (await sb.auth.getSession()).data.session?.user?.id ?? null;
   let recovery = false;
+  let backlogLocal = false;
   sb.auth.onAuthStateChange((event, session) => {
     uid = session?.user?.id ?? null;
     if (event === "PASSWORD_RECOVERY") recovery = true;
@@ -162,5 +182,36 @@ export async function createSupabaseApi({ url, anonKey }) {
       return new Map(check(await sb.rpc("film_stats", { ids })).map((r) => [r.film_id, r]));
     },
     async topFilms(minCount = 2, limit = 30) { return check(await sb.rpc("top_films", { min_count: minCount, lim: limit })); },
+
+    // "To rank" list. Falls back to this device if the backlog table hasn't been created yet.
+    async getBacklog() {
+      const { data, error } = await sb.from("backlog").select("film_id,created_at").eq("user_id", uid).order("created_at", { ascending: false });
+      if (error) {
+        if (missingTable(error)) { backlogLocal = true; return localBacklog(uid).get(); }
+        throw new Error(error.message);
+      }
+      backlogLocal = false;
+      return data;
+    },
+    async addBacklog(ids) {
+      if (!ids.length) return;
+      if (backlogLocal) return localBacklog(uid).add(ids);
+      const now = Date.now();
+      const rows = ids.map((film_id, i) => ({ film_id, created_at: new Date(now - i).toISOString() }));
+      const { error } = await sb.from("backlog").upsert(rows, { onConflict: "user_id,film_id", ignoreDuplicates: true });
+      if (error) throw new Error(error.message);
+    },
+    async removeBacklog(id) {
+      if (backlogLocal) return localBacklog(uid).remove(id);
+      check(await sb.from("backlog").delete().eq("user_id", uid).eq("film_id", id));
+    },
+    get backlogLocal() { return backlogLocal; },
+
+    // AI title matching through the match-films Edge Function. Returns null when it isn't set up.
+    async matchTitles(lines) {
+      const { data, error } = await sb.functions.invoke("match-films", { body: { lines } });
+      if (error || !data?.results) return null;
+      return data.results;
+    },
   };
 }

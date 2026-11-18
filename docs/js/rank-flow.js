@@ -7,6 +7,21 @@ import { posterHTML, openLayer, closeLayer, openModal, closeModal, scoreHTML } f
 import { detailsFormHTML, readDetails, bindWhereChips } from "./film-sheet.js";
 
 let F = null;
+// "Rank all, one by one": films still waiting after the current one, and how many the run started with.
+let queue = [];
+let queueTotal = 0;
+
+export function startQueue(ids) {
+  if (!ids.length) return;
+  queue = ids.slice(1);
+  queueTotal = ids.length;
+  startRank(ids[0]);
+}
+function nextInQueue() {
+  const id = queue.shift();
+  if (id == null) { queueTotal = 0; return; }
+  setTimeout(() => startRank(id), 180);
+}
 let onDone = null;
 
 export const flowActive = () => !!F;
@@ -23,7 +38,19 @@ export function cancelRank() {
   if (!F) return;
   if (F.step !== "done") restoreLists(F.prev);
   F = null;
+  queue = [];
+  queueTotal = 0;
   closeLayer("#flow");
+}
+
+// Leaves this film for later and moves on to the next one in the queue.
+function skipInQueue() {
+  if (!F) return;
+  restoreLists(F.prev);
+  F = null;
+  closeLayer("#flow");
+  if (queue.length) nextInQueue();
+  else queueTotal = 0;
 }
 
 function chooseBucket(b) {
@@ -94,21 +121,24 @@ async function complete(next = null) {
     api.postActivity({ kind: "ranked", film_id: f.id, bucket: s.b, score: s.score, note: det?.note || "" }).catch(() => {});
   }
   onDone?.(f.id);
-  if (next === "another") quickAdd();
+  if (next === "another") { queue = []; queueTotal = 0; quickAdd(); }
+  else if (queue.length) nextInQueue();
+  else queueTotal = 0;
 }
 
 function render() {
   const el = $("#flow");
   if (!F) return;
   const f = film(F.id);
-  const stepLabel = { feel: "Step 1 of 2", duel: "Step 2 of 2", saving: "Saving…", done: "Ranked" }[F.step];
+  const stepLabel = (queueTotal ? `Film ${queueTotal - queue.length} of ${queueTotal} · ` : "") + { feel: "Step 1 of 2", duel: "Step 2 of 2", saving: "Saving…", done: "Ranked" }[F.step];
   const top = `<div class="flow-top"><span class="step">${stepLabel}</span>
     <button class="close" style="position:static" data-act="${F.step === "done" ? "flow-done" : "flow-cancel"}" aria-label="Close">${ICON.close}</button></div>`;
   let body = "";
   if (F.step === "feel") {
     body = `<div class="feel-poster">${posterHTML(f)}</div><h2>How was ${esc(f.title)}?</h2>
       <p class="sub">${F.wasRanked ? "Re-ranking from scratch. " : ""}Go with your gut — you'll fine-tune it next.</p>
-      <div class="center"><div class="feels">${ORDER.map((b, i) => `<button class="feel ${b}" data-act="feel" data-b="${b}"><i>${BUCKETS[b].icon}</i>${BUCKETS[b].label}<small>${BUCKETS[b].hint}</small><kbd>${i + 1}</kbd></button>`).join("")}</div></div>`;
+      <div class="center"><div class="feels">${ORDER.map((b, i) => `<button class="feel ${b}" data-act="feel" data-b="${b}"><i>${BUCKETS[b].icon}</i>${BUCKETS[b].label}<small>${BUCKETS[b].hint}</small><kbd>${i + 1}</kbd></button>`).join("")}</div></div>
+      ${queueTotal ? `<div class="flow-foot"><button class="btn ghost sm" data-act="queue-skip">Skip this one for now</button></div>` : ""}`;
   } else if (F.step === "duel") {
     const mid = (F.lo + F.hi) >> 1;
     const opp = film(S.lists[F.bucket][mid]);
@@ -131,7 +161,7 @@ function render() {
       <p class="rank"><b>#${s.overall}</b> of ${rankedCount()} in your list · ${BUCKETS[s.b].short}${F.comps ? ` · ${F.comps} pick${F.comps === 1 ? "" : "s"}` : ""}</p>
       ${beat.length ? `<p class="beat">Ranked above ${beat.slice(0, 2).map(esc).join(" and ")}${beat.length > 2 ? ` and ${beat.length - 2} more` : ""}</p>` : ""}
       <div class="reveal-details">${detailsFormHTML(S.entries.get(F.id))}</div>
-      <div class="flow-foot"><button class="btn" data-act="flow-another">${ICON.plus} Rank another</button><button class="btn primary" data-act="flow-done">Done</button></div></div>`;
+      <div class="flow-foot"><button class="btn" data-act="flow-another">${ICON.plus} Rank another</button><button class="btn primary" data-act="flow-done">${queue.length ? `Next film ${ICON.chevron}` : "Done"}</button></div></div>`;
   }
   el.innerHTML = `<div class="flow-in">${top}${body}</div>`;
   el.scrollTop = 0;
@@ -165,6 +195,7 @@ export function flowAction(name, el) {
     case "flow-cancel": return cancelRank();
     case "flow-done": return complete();
     case "flow-another": return complete("another");
+    case "queue-skip": return skipInQueue();
   }
 }
 
@@ -182,7 +213,8 @@ export function flowKey(e) {
 export function quickAdd() {
   const dlg = openModal(`<h2 class="dlg-title">Rank a film</h2>
     <div class="searchbar">${ICON.search}<input id="qa" type="search" placeholder="Search ${filmCount().toLocaleString()} films" autocomplete="off"></div>
-    <div class="qa-results" id="qa-results"></div>`, { wide: true });
+    <div class="qa-results" id="qa-results"></div>
+    <a class="qa-bulk" href="#/lists/torank" data-act="modal-close-nav">${ICON.list}<span><b>Seen a lot of movies?</b><small>Type them all at once and rank them later</small></span>${ICON.chevron}</a>`, { wide: true });
   const input = dlg.querySelector("#qa");
   const out = dlg.querySelector("#qa-results");
   const draw = () => {

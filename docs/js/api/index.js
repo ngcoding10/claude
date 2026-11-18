@@ -9,6 +9,7 @@
 //   feed:     postActivity, deleteActivity, getFeed, like, unlike, getComments, addComment, deleteComment
 //   inbox:    getNotifications, unreadCount, markNotificationsRead, sendRec, getRecsForMe, deleteRec
 //   stats:    filmStats, topFilms
+//   to rank:  getBacklog, addBacklog, removeBacklog, backlogLocal, matchTitles (AI; null when unavailable)
 export let api = null;
 
 export async function initApi() {

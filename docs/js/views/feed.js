@@ -27,6 +27,7 @@ export async function renderFeed(view) {
           <div class="wk"><span class="flame ${st.activeThisWeek ? "on" : ""}">${ICON.flame}</span><div><b>${st.current} week${st.current === 1 ? "" : "s"}</b><small>${st.activeThisWeek ? "Streak is alive this week" : st.current ? "Rank a film to keep your streak" : "Rank a film to start a streak"}</small></div></div>
           <div class="wk"><span class="goal">${ring(goal.pct)}<em>${goal.pct}%</em></span><div><b>${goal.done} of ${goal.goal}</b><small>${goal.year} goal</small></div></div>
           <button class="btn primary block" data-act="quick-add">${ICON.plus} Rank a film</button>
+          ${S.backlog.length ? `<a class="btn block" href="#/lists/torank">${ICON.list} ${S.backlog.length} film${S.backlog.length === 1 ? "" : "s"} waiting to be ranked</a>` : ""}
         </div>
         <div class="panel-card" id="suggest"><h3>People to follow</h3><div class="muted">Loading…</div></div>
       </aside>
