@@ -11,7 +11,7 @@ import { renderDiscover, renderSearch, drawResults, moreResults, refreshQuick, s
 import { renderLists, shareList } from "./views/lists.js";
 import { renderProfile, showFollows, shareProfile } from "./views/profile.js";
 import { renderLeaderboard, renderNotifications, renderPeople, renderTogether, handleRequest } from "./views/social.js";
-import { signInWithGoogle, renderWelcome, renderOnboarding, onboardingNext, onboardingDone, renderSettings, exportData, deleteAccount, forgotPassword, needsOnboarding } from "./views/account.js";
+import { signInWithGoogle, shuffleOnboarding, renderWelcome, renderOnboarding, onboardingNext, onboardingDone, renderSettings, exportData, deleteAccount, forgotPassword, needsOnboarding } from "./views/account.js";
 
 const view = () => $("#view");
 
@@ -258,6 +258,7 @@ async function act(name, el) {
       await api.deleteRec(id);
       el.closest(".rec")?.remove();
       return;
+    case "ob-shuffle": return shuffleOnboarding();
     case "ob-next": return onboardingNext();
     case "ob-done": return onboardingDone();
     case "export": return exportData();

@@ -5,6 +5,7 @@ import { api } from "../api/index.js";
 import { S, followingIds, myRows, pendingRequests, approveFollower, removeFollower, refreshUnread, reloadFollows } from "../state.js";
 import { avatarHTML, emptyHTML, spinnerHTML, userRowHTML, userHref, posterHTML, cardHTML, demoTag } from "../ui.js";
 import { followBtnHTML } from "./feed.js";
+import { sample, softmax } from "../variety.js";
 
 let boardTab = "following";
 
@@ -139,7 +140,9 @@ async function suggestTogether() {
     scored.push([s, f, wantCount.get(f.id) || 0]);
   }
   scored.sort((a, b) => b[0] - a[0]);
-  const top = scored.slice(0, 18);
+  // A varied pick from the group's best matches, so "Find films" gives new ideas each time.
+  const ideas = sample(softmax(scored.slice(0, 90).map(([sc, f]) => [sc, f]), 1.2), 18);
+  const top = ideas.map((f) => [0, f, wantCount.get(f.id) || 0]);
   out.innerHTML = `<h2 class="h2m">Tonight's picks for ${members.length} of you</h2>
     <div class="grid">${top.map(([, f, w]) => cardHTML(f, { label: w ? `On ${w} watchlist${w === 1 ? "" : "s"}` : `${f.year}` })).join("")}</div>`;
 }

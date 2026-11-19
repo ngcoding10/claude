@@ -4,6 +4,7 @@ import { api } from "../api/index.js";
 import { S, loadSession, rankedCount, updateMe, rankedIds, myRows } from "../state.js";
 import { cardHTML, userRowHTML, avatarHTML, confirmDialog } from "../ui.js";
 import { followBtnHTML } from "./feed.js";
+import { sample, byPopularity } from "../variety.js";
 
 const onboardKey = () => `movi.onboarded.${S.me?.id}`;
 export const needsOnboarding = () => { try { return !localStorage.getItem(onboardKey()); } catch { return false; } };
@@ -131,16 +132,28 @@ export async function forgotPassword() {
 
 // ---------- Onboarding ----------
 let obStep = 1;
+// Well-known films to start with: a fresh set each visit, kept steady while you work through it.
+let obPicks = null;
+function onboardingPicks(fresh = false) {
+  const taken = new Set([...rankedIds(), ...S.skip]);
+  const keep = fresh || !obPicks ? [] : obPicks.filter((id) => !taken.has(id));
+  const pool = searchFilms({}).filter((f) => !taken.has(f.id) && !keep.includes(f.id)).slice(0, 400);
+  obPicks = [...keep, ...sample(byPopularity(pool, 2.2), 18 - keep.length).map((f) => f.id)];
+  return obPicks.map(film);
+}
+export function shuffleOnboarding() {
+  onboardingPicks(true);
+  renderOnboarding(document.querySelector("#view"));
+}
 export async function renderOnboarding(view) {
   const n = rankedCount();
   const steps = `<div class="ob-steps">${[1, 2].map((i) => `<i class="${obStep >= i ? "on" : ""}"></i>`).join("")}</div>`;
   if (obStep === 1) {
-    const taken = new Set([...rankedIds(), ...S.skip]);
-    const picks = searchFilms({}).filter((f) => !taken.has(f.id)).slice(0, 18);
+    const picks = onboardingPicks();
     view.innerHTML = `<div class="ob">${steps}
       <h1>Rank 3 films you've seen</h1>
       <p class="muted">Pick films you know well. ${n ? `<b>${Math.min(n, 3)} of 3 done.</b>` : "It takes a few seconds each."}</p>
-      <div class="row-c"><button class="btn" data-act="quick-add">${ICON.search} Search for a film</button><a class="btn" href="#/lists/torank">${ICON.list} Paste a list of movies</a>${n >= 3 ? `<button class="btn primary" data-act="ob-next">Next: find friends ${ICON.chevron}</button>` : `<button class="btn ghost" data-act="ob-next">Skip for now</button>`}</div>
+      <div class="row-c"><button class="btn" data-act="quick-add">${ICON.search} Search for a film</button><a class="btn" href="#/lists/torank">${ICON.list} Paste a list of movies</a><button class="btn" data-act="ob-shuffle">${ICON.repeat} Show others</button>${n >= 3 ? `<button class="btn primary" data-act="ob-next">Next: find friends ${ICON.chevron}</button>` : `<button class="btn ghost" data-act="ob-next">Skip for now</button>`}</div>
       <div class="grid quick mt-5">${picks.map((f) => cardHTML(f, { acts: `<div class="acts"><button data-act="rank" data-id="${f.id}">Seen it</button><button data-act="skip" data-id="${f.id}">Not seen</button></div>` })).join("")}</div></div>`;
     return;
   }

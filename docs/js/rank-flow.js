@@ -4,7 +4,7 @@ import { BUCKETS, ORDER } from "./model.js";
 import { api } from "./api/index.js";
 import { S, scoreOf, rankedCount, detachRanking, restoreLists, commitRanking, updateDetails } from "./state.js";
 import { posterHTML, openLayer, closeLayer, openModal, closeModal, scoreHTML, reduceMotion } from "./ui.js";
-import { detailsFormHTML, readDetails, bindWhereChips } from "./film-sheet.js";
+import { detailsFormHTML, readDetails, bindWhereChips, recommendFor } from "./film-sheet.js";
 
 let F = null;
 // "Rank all, one by one": films still waiting after the current one, and how many the run started with.
@@ -220,10 +220,12 @@ export function quickAdd() {
     <a class="qa-bulk" href="#/lists/torank" data-act="modal-close-nav">${ICON.list}<span><b>Seen a lot of movies?</b><small>Type them all at once and rank them later</small></span>${ICON.chevron}</a>`, { wide: true });
   const input = dlg.querySelector("#qa");
   const out = dlg.querySelector("#qa-results");
+  // Before typing: a fresh, personalized set every time the box opens (and on Shuffle).
+  let suggestions = recommendFor(12);
   const draw = () => {
     const q = input.value.trim();
-    const films = q ? searchFilms({ q }).slice(0, 30) : searchFilms({}).filter((f) => !scoreOf(f.id)).slice(0, 12);
-    out.innerHTML = (q ? "" : `<p class="muted qa-hint">Popular films you haven't ranked</p>`) + (films.length
+    const films = q ? searchFilms({ q }).slice(0, 30) : suggestions;
+    out.innerHTML = (q ? "" : `<div class="qa-head"><p class="muted qa-hint">Suggested for you · seen any?</p><button type="button" class="btn sm ghost" id="qa-shuffle">${ICON.repeat} Shuffle</button></div>`) + (films.length
       ? films.map((f) => {
           const s = scoreOf(f.id);
           return `<button class="qa-row" data-act="qa-pick" data-id="${f.id}">${posterHTML(f, "s")}<span><b>${esc(f.title)}</b><small>${f.year}${s ? " · in your list" : ""}</small></span>${s ? scoreHTML(s.score) : `<span class="qa-go">${ICON.rank}</span>`}</button>`;
@@ -231,6 +233,11 @@ export function quickAdd() {
       : `<p class="muted qa-hint">No films match “${esc(q)}”.</p>`);
   };
   input.addEventListener("input", debounce(draw, 120));
+  out.addEventListener("click", (e) => {
+    if (!e.target.closest("#qa-shuffle")) return;
+    suggestions = recommendFor(12);
+    draw();
+  });
   draw();
 }
 
