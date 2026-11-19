@@ -30,6 +30,11 @@ const num = (r) => ({ ...r, score: r.score == null ? null : Number(r.score) });
 export async function createSupabaseApi({ url, anonKey }) {
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm");
   const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+  // Which sign-in providers are switched on in the Supabase dashboard (the Google button only shows if it is).
+  const providers = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: anonKey } })
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((s) => s.external || {})
+    .catch(() => ({}));
   let uid = (await sb.auth.getSession()).data.session?.user?.id ?? null;
   let recovery = false;
   let backlogLocal = false;
@@ -80,8 +85,9 @@ export async function createSupabaseApi({ url, anonKey }) {
       if (error) throw new Error(error.message === "Invalid login credentials" ? "Wrong email or password" : error.message);
       uid = data.user.id;
     },
-    supportsGoogle: true,
+    supportsGoogle: !!providers.google,
     async signInWithGoogle() {
+      if (!providers.google) throw new Error("Google sign-in isn't switched on yet. Use email for now.");
       const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
       if (error) throw new Error(error.message);
     },
