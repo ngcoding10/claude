@@ -2,7 +2,7 @@ import { $, esc, ICON, debounce } from "../util.js";
 import { film, filmCount, genres, searchFilms, topByGenre } from "../films.js";
 import { api } from "../api/index.js";
 import { S, rankedIds, rankedCount, avgScore, loadFriendRows, followingIds, myRows } from "../state.js";
-import { cardHTML, railHTML, sectionHTML, emptyHTML, userRowHTML, spinnerHTML } from "../ui.js";
+import { cardHTML, railHTML, sectionHTML, emptyHTML, userRowHTML, spinnerHTML, withTransition } from "../ui.js";
 import { recommendFor, similarFilms } from "../film-sheet.js";
 import { beginPage, sample, byPopularity } from "../variety.js";
 import { genreAffinity } from "../model.js";
@@ -142,7 +142,7 @@ export function renderSearch(view, params) {
     <div id="results"></div>`;
   const q = $("#q");
   q.addEventListener("input", debounce(() => { SQ.q = q.value; SQ.page = 1; drawResults(); }, 140));
-  view.querySelectorAll("[data-stab]").forEach((b) => b.addEventListener("click", () => { SQ.tab = b.dataset.stab; renderSearch(view, new URLSearchParams()); }));
+  view.querySelectorAll("[data-stab]").forEach((b) => b.addEventListener("click", () => { SQ.tab = b.dataset.stab; withTransition(() => renderSearch(view, new URLSearchParams())); }));
   if (SQ.tab === "films") {
     $("#sort").value = SQ.sort;
     $("#decade").addEventListener("change", (e) => { SQ.decade = e.target.value; SQ.page = 1; drawResults(); });

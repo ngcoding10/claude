@@ -3,7 +3,7 @@ import { film } from "../films.js";
 import { BUCKETS, streaks, goalProgress } from "../model.js";
 import { api } from "../api/index.js";
 import { S, followingIds, myRows, scoreOf, isWatch } from "../state.js";
-import { posterHTML, avatarHTML, nameHTML, scoreHTML, emptyHTML, spinnerHTML, userRowHTML, demoTag } from "../ui.js";
+import { posterHTML, avatarHTML, nameHTML, scoreHTML, emptyHTML, spinnerHTML, userRowHTML, demoTag, withTransition } from "../ui.js";
 
 let feedTab = "following";
 let cursor = null;
@@ -32,7 +32,7 @@ export async function renderFeed(view) {
         <div class="panel-card" id="suggest"><h3>People to follow</h3><div class="muted">Loading…</div></div>
       </aside>
     </div>`;
-  view.querySelectorAll("[data-feedtab]").forEach((b) => b.addEventListener("click", () => { feedTab = b.dataset.feedtab; renderFeed(view); }));
+  view.querySelectorAll("[data-feedtab]").forEach((b) => b.addEventListener("click", () => { feedTab = b.dataset.feedtab; withTransition(() => renderFeed(view)); }));
   cursor = null;
   await loadPosts(true);
   loadSuggestions();

@@ -689,3 +689,19 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 }
 .qa-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .qa-head .qa-hint { margin: 0 var(--space-2); }
+
+/* ---------- View transitions (tab switches, removed items) ---------- */
+.topbar { view-transition-name: topbar; }
+.tabbar { view-transition-name: tabbar; }
+.seg .on { view-transition-name: seg-on; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--dur-fast); }
+::view-transition-group(seg-on) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
+.vt-cards .grid .card, .vt-cards .rec, .vt-cards .post, .vt-cards .urow { view-transition-name: match-element; view-transition-class: item; }
+::view-transition-group(.item) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
+::view-transition-old(.item):only-child { animation: vt-out var(--dur-fast) var(--ease-in) forwards; }
+::view-transition-new(.item):only-child { animation: vt-in var(--dur-med) var(--ease-out); }
+@keyframes vt-in { from { opacity: 0; transform: scale(.92); } }
+@keyframes vt-out { to { opacity: 0; transform: scale(.92); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

@@ -2,7 +2,7 @@ import { $, esc, ICON, toast } from "./util.js";
 import { loadFilms, film, isFilmId } from "./films.js";
 import { initApi, api } from "./api/index.js";
 import { S, rankedIds, removeBacklog, updateMe, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
-import { fillMissingPosters, avatarHTML, closeModal, modalOpen, confirmDialog, spinnerHTML, emptyHTML } from "./ui.js";
+import { fillMissingPosters, avatarHTML, closeModal, modalOpen, confirmDialog, spinnerHTML, emptyHTML, withTransition } from "./ui.js";
 import { openFilm, closeFilm, refreshFilm, refreshFilmPoster, recommendDialog, shareFilm, sheetFilmId } from "./film-sheet.js";
 import { startRank, startQueue, cancelRank, flowActive, flowAction, flowKey, quickAdd, quickPick, requireMe, setFlowDoneHandler } from "./rank-flow.js";
 import { runMatch, addReviewed, clearReview } from "./views/torank.js";
@@ -60,19 +60,29 @@ async function route() {
   await draw(current);
 }
 
+// Switching tabs within one screen (My Lists tabs, a profile's tabs) swaps content in place.
+let drawn = null;
+const isTabSwitch = (a, b) => a && a.name === b.name && ["lists", "u"].includes(b.name) && (b.name !== "u" || a.args[0] === b.args[0]);
+
 async function draw(c, keepScroll = false) {
   const r = ROUTES[c.name];
   const y = scrollY;
+  const tabSwitch = !keepScroll && isTabSwitch(drawn, c);
+  drawn = c;
   document.body.dataset.route = c.name;
   renderShell(r.nav);
   const v = view();
+  const render = async () => {
+    try {
+      await r.render(v, c.args, c.params);
+    } catch (e) {
+      console.error(e);
+      v.innerHTML = emptyHTML({ title: "Something went wrong", text: esc(e.message), action: `<button class="btn" onclick="location.reload()">Reload</button>` });
+    }
+  };
+  if (tabSwitch) return withTransition(render);
   if (!keepScroll) v.innerHTML = spinnerHTML();
-  try {
-    await r.render(v, c.args, c.params);
-  } catch (e) {
-    console.error(e);
-    v.innerHTML = emptyHTML({ title: "Something went wrong", text: esc(e.message), action: `<button class="btn" onclick="location.reload()">Reload</button>` });
-  }
+  await render();
   if (keepScroll) scrollTo(0, y);
   else {
     // A short fade-up when switching screens; soft refreshes keep content still.
@@ -144,6 +154,9 @@ document.addEventListener("movi:auth", () => current && renderShell(ROUTES[curre
 document.addEventListener("movi:signedout", () => { clearSession(); go("#/welcome"); });
 
 // ---------------- Refresh after changes ----------------
+// Removed items shrink away while their neighbors slide into the gap.
+const removeItem = (el) => el && withTransition(() => el.remove(), { cards: true });
+
 function softRefresh() {
   const n = current?.name;
   if (n === "discover") {
@@ -207,7 +220,7 @@ async function act(name, el) {
     case "delete-post": {
       if (!(await confirmDialog({ title: "Delete this post?", text: "It's removed from feeds along with its likes and comments. Your ranking stays.", ok: "Delete", danger: true }))) return;
       await api.deleteActivity(id);
-      el.closest(".post")?.remove();
+      removeItem(el.closest(".post"));
       return;
     }
     case "skip-main": return $("#view").focus();
@@ -220,7 +233,11 @@ async function act(name, el) {
     }
     case "bulk-add": await addReviewed(); return rerender();
     case "bulk-clear": clearReview(); return rerender();
-    case "unbacklog": await removeBacklog(id); toast("Removed from To rank"); return rerender();
+    case "unbacklog":
+      await removeBacklog(id);
+      toast("Removed from To rank");
+      await removeItem(el.closest(".card"));
+      return rerender();
     case "rank-queue": if (requireMe()) startQueue(S.backlog.map((b) => b.film_id)); return;
     case "feed-more": return feedMore();
     case "more": return moreResults();
@@ -245,18 +262,18 @@ async function act(name, el) {
     }
     case "remove-follower":
       await removeFollower(uid);
-      el.closest(".urow")?.remove();
+      removeItem(el.closest(".urow"));
       toast("Follower removed");
       return;
     case "approve":
     case "decline":
       await handleRequest(uid, name === "approve");
-      el.closest(".urow")?.remove();
+      removeItem(el.closest(".urow"));
       return;
     case "show-follows": return showFollows(uid, el.dataset.kind);
     case "dismiss-rec":
       await api.deleteRec(id);
-      el.closest(".rec")?.remove();
+      removeItem(el.closest(".rec"));
       return;
     case "ob-shuffle": return shuffleOnboarding();
     case "ob-next": return onboardingNext();

@@ -46,6 +46,16 @@ export function userRowHTML(p, right = "", sub = "") {
 // ---------- Layers: film sheet (#sheet), dialog (#modal), ranking flow (#flow) ----------
 function lock() { document.body.classList.add("locked"); }
 export { reduceMotion };
+// Runs a DOM update as a View Transition where supported: tab switches cross-fade with the
+// highlight sliding across, and with { cards: true } list items glide into place as others leave.
+export function withTransition(update, { cards = false } = {}) {
+  if (!document.startViewTransition || reduceMotion()) return Promise.resolve(update());
+  const root = document.documentElement;
+  if (cards) root.classList.add("vt-cards");
+  const t = document.startViewTransition(update);
+  t.finished.catch(() => {}).finally(() => root.classList.remove("vt-cards"));
+  return t.updateCallbackDone;
+}
 export function unlockIfClear() {
   if ($("#sheet").hidden && $("#modal").hidden && $("#flow").hidden) document.body.classList.remove("locked");
 }

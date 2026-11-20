@@ -3,7 +3,7 @@ import { film, allFilms, genres } from "../films.js";
 import { genreAffinity } from "../model.js";
 import { api } from "../api/index.js";
 import { S, followingIds, myRows, pendingRequests, approveFollower, removeFollower, refreshUnread, reloadFollows } from "../state.js";
-import { avatarHTML, emptyHTML, spinnerHTML, userRowHTML, userHref, posterHTML, cardHTML, demoTag } from "../ui.js";
+import { avatarHTML, emptyHTML, spinnerHTML, userRowHTML, userHref, posterHTML, cardHTML, demoTag, withTransition } from "../ui.js";
 import { followBtnHTML } from "./feed.js";
 import { sample, softmax } from "../variety.js";
 
@@ -13,7 +13,7 @@ export async function renderLeaderboard(view) {
   view.innerHTML = `<div class="list-head"><div><h1>Leaderboard</h1><p class="sub-line">Who's ranked the most films.</p></div></div>
     <div class="seg big" role="tablist">${["following", "everyone"].map((t) => `<button role="tab" class="${boardTab === t ? "on" : ""}" data-btab="${t}">${t === "following" ? "Friends" : "Everyone"}</button>`).join("")}</div>
     <div id="board">${spinnerHTML()}</div>`;
-  view.querySelectorAll("[data-btab]").forEach((b) => b.addEventListener("click", () => { boardTab = b.dataset.btab; renderLeaderboard(view); }));
+  view.querySelectorAll("[data-btab]").forEach((b) => b.addEventListener("click", () => { boardTab = b.dataset.btab; withTransition(() => renderLeaderboard(view)); }));
   if (S.me) await reloadFollows().catch(() => {});
   const ids = boardTab === "following" && S.me ? [S.me.id, ...followingIds()] : null;
   const list = await api.listProfiles({ ids, limit: 100 });
