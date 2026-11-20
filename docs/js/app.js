@@ -3,7 +3,7 @@ import { loadFilms, film, isFilmId } from "./films.js";
 import { initApi, api } from "./api/index.js";
 import { S, rankedIds, removeBacklog, updateMe, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
 import { fillMissingPosters, avatarHTML, closeModal, modalOpen, confirmDialog, spinnerHTML, emptyHTML } from "./ui.js";
-import { openFilm, closeFilm, refreshFilm, recommendDialog, shareFilm, sheetFilmId } from "./film-sheet.js";
+import { openFilm, closeFilm, refreshFilm, refreshFilmPoster, recommendDialog, shareFilm, sheetFilmId } from "./film-sheet.js";
 import { startRank, startQueue, cancelRank, flowActive, flowAction, flowKey, quickAdd, quickPick, requireMe, setFlowDoneHandler } from "./rank-flow.js";
 import { runMatch, addReviewed, clearReview } from "./views/torank.js";
 import { renderFeed, feedMore, toggleLike, toggleComments, deleteComment, followBtnHTML } from "./views/feed.js";
@@ -138,7 +138,7 @@ function renderShell(active) {
     : "";
   document.body.classList.toggle("guest", !me);
 }
-document.addEventListener("movi:posters", () => fillMissingPosters());
+document.addEventListener("movi:posters", () => { fillMissingPosters(); refreshFilmPoster(); });
 document.addEventListener("movi:unread", () => current && renderShell(ROUTES[current.name]?.nav));
 document.addEventListener("movi:auth", () => current && renderShell(ROUTES[current.name]?.nav));
 document.addEventListener("movi:signedout", () => { clearSession(); go("#/welcome"); });
@@ -267,6 +267,7 @@ async function act(name, el) {
     case "sign-out":
       await api.signOut();
       clearSession();
+      clearReview();
       toast("Signed out");
       return go("#/welcome");
     case "delete-account": return deleteAccount();

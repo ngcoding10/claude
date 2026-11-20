@@ -31,7 +31,7 @@ export function startRank(id) {
 }
 
 export function cancelRank() {
-  if (!F) return;
+  if (!F || F.step === "saving") return;
   if (F.step !== "done") restoreLists(F.prev);
   F = null;
   queue = [];
@@ -70,11 +70,13 @@ function pick(newIsBetter, tie = false) {
   else F.lo = mid + 1;
   const next = () => (F.lo >= F.hi ? finish() : render());
   if (tie) return next();
+  const flow = F;
   F.busy = true;
   navigator.vibrate?.(8);
   $(newIsBetter ? "#pick-new" : "#pick-old")?.classList.add("chosen");
   $(newIsBetter ? "#pick-old" : "#pick-new")?.classList.add("lost");
-  setTimeout(() => { if (F) { F.busy = false; next(); } }, 260);
+  // Only continue if this is still the same ranking (it may have been closed in the meantime).
+  setTimeout(() => { if (F === flow) { F.busy = false; next(); } }, 260);
 }
 
 function undo() {
@@ -89,15 +91,19 @@ function undo() {
 }
 
 async function finish() {
+  const flow = F;
   F.step = "saving";
   render();
   try {
     await commitRanking({ filmId: F.id, bucket: F.bucket, index: F.lo, prev: F.prev });
   } catch {
     F = null;
+    queue = [];
+    queueTotal = 0;
     closeLayer("#flow");
     return;
   }
+  if (F !== flow) return;
   F.step = "done";
   const e = S.entries.get(F.id);
   if (!e.watched_on && !F.wasRanked) e.watched_on = today();
@@ -131,7 +137,7 @@ function render() {
   const f = film(F.id);
   const stepLabel = (queueTotal ? `Film ${queueTotal - queue.length} of ${queueTotal} · ` : "") + { feel: "Step 1 of 2", duel: "Step 2 of 2", saving: "Saving…", done: "Ranked" }[F.step];
   const top = `<div class="flow-top"><span class="step">${stepLabel}</span>
-    <button class="close" style="position:static" data-act="${F.step === "done" ? "flow-done" : "flow-cancel"}" aria-label="Close">${ICON.close}</button></div>`;
+    ${F.step === "saving" ? "" : `<button class="close" style="position:static" data-act="${F.step === "done" ? "flow-done" : "flow-cancel"}" aria-label="Close">${ICON.close}</button>`}</div>`;
   let body = "";
   if (F.step === "feel") {
     body = `<div class="feel-poster">${posterHTML(f)}</div><h2>How was ${esc(f.title)}?</h2>

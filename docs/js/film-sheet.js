@@ -62,14 +62,23 @@ export async function openFilm(id) {
 export function refreshFilm() {
   if (current && !$("#sheet").hidden) rerender();
 }
+// Background posters arrived: redraw the open film page only if its poster was missing.
+export function refreshFilmPoster() {
+  if (current && !$("#sheet").hidden && film(current.id).poster && !$("#sheet .film .poster img")) rerender();
+}
 export const sheetFilmId = () => (!$("#sheet").hidden && current ? current.id : null);
 
 function rerender() {
   const panel = $("#sheet .panel");
   const top = panel ? panel.scrollTop : 0;
+  // Redrawing replaces every element; put keyboard focus back on the equivalent one.
+  const active = document.activeElement;
+  const hadFocus = $("#sheet").contains(active);
+  const focusKey = hadFocus ? (active.id ? `#${active.id}` : active.dataset.act ? `[data-act="${active.dataset.act}"]` : active.name ? `[name="${active.name}"]` : null) : null;
   $("#sheet").innerHTML = sheetHTML(film(current.id), current, false);
   $("#sheet .panel").scrollTop = top;
   bindDetails(current.id);
+  if (hadFocus) ((focusKey && $(`#sheet .panel ${focusKey}`)) || $("#sheet .close"))?.focus({ preventScroll: true });
 }
 
 export function closeFilm() {

@@ -31,8 +31,17 @@ export function splitInput(text) {
   for (let line of text.split(/\r?\n/)) {
     line = line.replace(/^\s*(?:[-*•·]|\d{1,3}[.)])\s+/, "").trim();
     if (!line) continue;
-    const pieces = exactTitles().has(norm(line)) ? [line] : line.split(/\s*[,;|]\s*|\s+\/\s+/);
-    for (const p of pieces) if (p.trim()) out.push(p.trim());
+    if (exactTitles().has(norm(line))) { out.push(line); continue; }
+    // Split on commas, but rejoin neighbors that together form a known title ("Crouching Tiger, Hidden Dragon").
+    const parts = line.split(/\s*[,;|]\s*|\s+\/\s+/).filter((p) => p.trim());
+    for (let i = 0; i < parts.length; ) {
+      let take = 1;
+      for (let j = Math.min(parts.length, i + 4); j > i + 1; j--) {
+        if (exactTitles().has(norm(parts.slice(i, j).join(", ")))) { take = j - i; break; }
+      }
+      out.push(parts.slice(i, i + take).join(", ").trim());
+      i += take;
+    }
   }
   const seen = new Set();
   return out.filter((t) => !seen.has(norm(t)) && seen.add(norm(t)));
@@ -74,7 +83,11 @@ function scoreFilm(f, q, words) {
     else if (q.part === 1 && !nums.length) s += 40;
     else s -= nums.length ? 40 : 30;
   } else if (nums.length && t !== q.base) s -= 15;
-  if (q.year) s += f.year === q.year ? 80 : Math.abs(f.year - q.year) === 1 ? 40 : -20;
+  if (q.year) {
+    // A number like 2049 may be part of the title ("Blade Runner 2049") rather than a release year.
+    if (` ${t} `.includes(` ${q.year} `)) s += 150;
+    else s += f.year === q.year ? 80 : Math.abs(f.year - q.year) === 1 ? 40 : -20;
+  }
   return s;
 }
 

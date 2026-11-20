@@ -65,10 +65,14 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Use POST" }, 405);
 
-  const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const auth = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", supabaseKey, { global: { headers: { Authorization: auth } } });
-  const { data: userData } = await supabase.auth.getUser();
+  // Only signed-in members may use matching. Any project key works for checking the member's token;
+  // newer projects may not set SUPABASE_ANON_KEY, so fall back to the service role key.
+  const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseKey) return json({ error: "Supabase keys are not available to this function" }, 500);
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return json({ error: "Sign in to use matching" }, 401);
+  const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", supabaseKey, { auth: { persistSession: false } });
+  const { data: userData } = await supabase.auth.getUser(token);
   if (!userData?.user) return json({ error: "Sign in to use matching" }, 401);
 
   let body: { lines?: unknown };

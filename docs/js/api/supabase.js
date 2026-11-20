@@ -31,11 +31,15 @@ export async function createSupabaseApi({ url, anonKey }) {
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm");
   const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
   // Which sign-in providers are switched on in the Supabase dashboard (the Google button only shows if it is).
-  const providers = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: anonKey } })
-    .then((r) => (r.ok ? r.json() : {}))
-    .then((s) => s.external || {})
-    .catch(() => ({}));
-  let uid = (await sb.auth.getSession()).data.session?.user?.id ?? null;
+  // Fetched alongside the session, with a time limit so a slow network never holds up startup.
+  const [providers, session] = await Promise.all([
+    fetch(`${url}/auth/v1/settings`, { headers: { apikey: anonKey }, signal: AbortSignal.timeout(4000) })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((s) => s.external || {})
+      .catch(() => ({})),
+    sb.auth.getSession(),
+  ]);
+  let uid = session.data.session?.user?.id ?? null;
   let recovery = false;
   let backlogLocal = false;
   sb.auth.onAuthStateChange((event, session) => {
@@ -134,8 +138,10 @@ export async function createSupabaseApi({ url, anonKey }) {
 
     async follow(id) {
       const { data, error } = await sb.from("follows").insert({ followee: id }).select("status").single();
-      if (error && error.code !== "23505") throw new Error(error.message);
-      return data?.status ?? "accepted";
+      if (!error) return data.status;
+      if (error.code !== "23505") throw new Error(error.message);
+      // Already following or requested: report the existing status.
+      return check(await sb.from("follows").select("status").eq("follower", uid).eq("followee", id).single()).status;
     },
     async unfollow(id) { check(await sb.from("follows").delete().eq("follower", uid).eq("followee", id)); },
     async removeFollower(id) { check(await sb.from("follows").delete().eq("follower", id).eq("followee", uid)); },

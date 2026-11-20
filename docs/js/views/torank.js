@@ -10,8 +10,14 @@ const EXAMPLE = "karate kid, star wars 1, star wars 2, harry potter";
 let draft = "";
 let review = null;
 let usedAi = false;
+let owner = null;
 
 export function renderToRank(body) {
+  // A typed list belongs to whoever typed it; start clean after a sign-out or account switch.
+  if (owner !== S.me?.id) {
+    owner = S.me?.id;
+    clearReview();
+  }
   const live = api.mode === "supabase";
   body.innerHTML = `
     <section class="panel-card bulk">
