@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://nicorgutierrez08-eng.github.io/claude/sitemap.xml
+Sitemap: https://ngcoding10.github.io/claude/sitemap.xml

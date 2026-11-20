@@ -70,7 +70,7 @@ It opens in demo mode. Create an account and start ranking.
    };
    ```
    Both values are safe to publish. The database's security rules protect the data, not the key.
-4. **Set up email links.** In **Authentication → URL Configuration**, set **Site URL** to wherever the app is hosted, for example `https://nicorgutierrez08-eng.github.io/claude/`. Add the same address under **Redirect URLs**. This makes sign-up confirmation and password-reset emails link back to your site.
+4. **Set up email links.** In **Authentication → URL Configuration**, set **Site URL** to wherever the app is hosted, for example `https://ngcoding10.github.io/claude/`. Add the same address under **Redirect URLs**. This makes sign-up confirmation and password-reset emails link back to your site.
    - Supabase asks new users to confirm their email by default. To let people in right away while testing, turn off **Authentication → Providers → Email → Confirm email**.
 5. **Run the second database update.** In the SQL Editor, run [`supabase/migrations/20261118000000_to_rank.sql`](supabase/migrations/20261118000000_to_rank.sql) the same way. It adds the To rank list and uses Google names for Google accounts. Until it's run, To rank lists are saved on each device only.
 6. Reload the app. The "Demo mode" note disappears and accounts are now real.
@@ -79,7 +79,7 @@ It opens in demo mode. Create an account and start ranking.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com), create a project (any name, e.g. "Movi"), then open **APIs & Services → OAuth consent screen**. Choose **External**, fill in the app name (Movi), your email as support and developer contact, and save. Add yourself under **Test users** while it's in testing, or click **Publish app** so anyone can sign in.
 2. Open **APIs & Services → Credentials → Create credentials → OAuth client ID**. Application type: **Web application**.
-   - **Authorized JavaScript origins:** `https://nicorgutierrez08-eng.github.io`
+   - **Authorized JavaScript origins:** `https://ngcoding10.github.io`
    - **Authorized redirect URIs:** `https://plnqlxyzqxnhnxgdooiq.supabase.co/auth/v1/callback` (your Supabase project URL plus `/auth/v1/callback`; Supabase shows the exact value on its Google provider page).
    - Click **Create** and copy the **Client ID** and **Client secret**.
 3. In Supabase, open **Authentication → Sign In / Providers → Google**, turn it on, paste the Client ID and Client secret, and save.
