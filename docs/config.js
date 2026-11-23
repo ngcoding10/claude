@@ -12,5 +12,5 @@ window.MOVI_CONFIG = {
     messagingSenderId: "102320113071",
     appId: "1:102320113071:web:d14b87d4e52a4f23181b5a",
   },
-  appCheckSiteKey: null,
+  appCheckSiteKey: "6LeG7S4uAAAAABOlsa7JG8j-B_Cy7d9EWDMP8iJH",
 };
