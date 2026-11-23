@@ -4,6 +4,13 @@
 //   appCheckSiteKey: App Check → the reCAPTCHA Enterprise site key
 // The security rules in the backend repo protect the data, not these values. Never put a secret here.
 window.MOVI_CONFIG = {
-  firebase: null,
+  firebase: {
+    apiKey: "AIzaSyBS9L5-lAQXibNvtXDXDeBDRXVIWRIg7v0",
+    authDomain: "combination-23e84.firebaseapp.com",
+    projectId: "combination-23e84",
+    storageBucket: "combination-23e84.firebasestorage.app",
+    messagingSenderId: "102320113071",
+    appId: "1:102320113071:web:d14b87d4e52a4f23181b5a",
+  },
   appCheckSiteKey: null,
 };
