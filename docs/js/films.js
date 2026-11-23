@@ -15,10 +15,14 @@ export async function loadFilms() {
     genres: raw.genres,
     shard: raw.shard,
     posterBase: raw.posterBase,
-    films: raw.films.map(([title, year, g, poster, pop], id) => ({ id, title, year, g, poster, pop, n: norm(title) })),
+    // `alt` holds a film's other names ("Se7en" for "Seven"), so search and list matching find it either way.
+    films: raw.films.map(([title, year, g, poster, pop, alt], id) => ({ id, title, year, g, poster, pop, n: norm(title), alt: (alt || []).map(norm).filter(Boolean) })),
   };
+  // A film's id is its position in the data and never changes (rankings are saved by id), so new films
+  // are added at the end. Anything that wants "most popular first" uses this order, not the ids.
+  DB.byPop = [...DB.films].sort((a, b) => b.pop - a.pop || a.id - b.id);
   const counts = new Array(DB.genres.length).fill(0);
-  DB.films.slice(0, 3000).forEach((f) => f.g.forEach((g) => counts[g]++));
+  DB.byPop.slice(0, 3000).forEach((f) => f.g.forEach((g) => counts[g]++));
   DB.genreFreq = counts.map((c) => Math.max(c, 1) / 3000);
   DB.postersReady = loadRestPosters(raw.corePosters ?? DB.films.length);
   return DB;
@@ -37,7 +41,10 @@ async function loadRestPosters(core) {
 export const genreFreq = (name) => DB.genreFreq[DB.genres.indexOf(name)] ?? 0.05;
 
 export const filmCount = () => DB.films.length;
-export const allFilms = () => DB.films;
+/** Every film, most popular first. */
+export const allFilms = () => DB.byPop;
+/** A film's title and other names, normalised for matching. */
+export const namesOf = (f) => (f.alt.length ? [f.n, ...f.alt] : [f.n]);
 export const genres = () => DB.genres;
 export const film = (id) => DB.films[id];
 export const isFilmId = (id) => Number.isInteger(id) && id >= 0 && id < DB.films.length;
@@ -77,7 +84,7 @@ export function searchFilms({ q = "", genre = "", decade = "", sort = "pop", exc
   const dec = decade ? Number(decade) : null;
   const phrase = words.join(" ");
   const out = [];
-  for (const f of DB.films) {
+  for (const f of DB.byPop) {
     if (exclude && exclude.has(f.id)) continue;
     if (g >= 0 && !f.g.includes(g)) continue;
     if (dec !== null && (f.year < dec || f.year >= dec + 10)) continue;
@@ -88,15 +95,20 @@ export function searchFilms({ q = "", genre = "", decade = "", sort = "pop", exc
       if (titleHasYear) rel += 2;
     }
     if (words.length) {
-      if (!words.every((w) => f.n.includes(w))) continue;
-      rel += f.n === phrase ? 3 : f.n.startsWith(phrase) ? 2 : ` ${f.n}`.includes(` ${words[0]}`) ? 1 : 0;
+      let best = -1;
+      for (const n of namesOf(f)) {
+        if (!words.every((w) => n.includes(w))) continue;
+        best = Math.max(best, n === phrase ? 3 : n.startsWith(phrase) ? 2 : ` ${n}`.includes(` ${words[0]}`) ? 1 : 0);
+      }
+      if (best < 0) continue;
+      rel += best;
     }
     out.push([rel, f]);
   }
   const sorters = {
-    pop: (a, b) => b[0] - a[0] || a[1].id - b[1].id,
-    new: (a, b) => b[0] - a[0] || b[1].year - a[1].year || a[1].id - b[1].id,
-    old: (a, b) => b[0] - a[0] || a[1].year - b[1].year || a[1].id - b[1].id,
+    pop: (a, b) => b[0] - a[0] || b[1].pop - a[1].pop || a[1].id - b[1].id,
+    new: (a, b) => b[0] - a[0] || b[1].year - a[1].year || b[1].pop - a[1].pop || a[1].id - b[1].id,
+    old: (a, b) => b[0] - a[0] || a[1].year - b[1].year || b[1].pop - a[1].pop || a[1].id - b[1].id,
     az: (a, b) => a[1].n.localeCompare(b[1].n),
   };
   return out.sort(sorters[sort] || sorters.pop).map((x) => x[1]);
@@ -105,7 +117,7 @@ export function searchFilms({ q = "", genre = "", decade = "", sort = "pop", exc
 export function topByGenre(name, limit = 20, exclude = null) {
   const g = DB.genres.indexOf(name);
   const out = [];
-  for (const f of DB.films) {
+  for (const f of DB.byPop) {
     if (f.g.includes(g) && !(exclude && exclude.has(f.id))) out.push(f);
     if (out.length >= limit) break;
   }

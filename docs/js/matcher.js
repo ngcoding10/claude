@@ -2,7 +2,7 @@
 // A local matcher always runs; in live mode the moviMatchFilms Cloud Function asks Claude to resolve
 // nicknames, numbering and franchises, and its answers are mapped back onto the local database.
 // If the function is unavailable (or the daily limit is reached) the local answers are used as they are.
-import { allFilms } from "./films.js";
+import { allFilms, namesOf } from "./films.js";
 import { api } from "./api/index.js";
 import { norm } from "./util.js";
 
@@ -14,7 +14,7 @@ let titleIndex = null;
 function exactTitles() {
   if (!titleIndex) {
     titleIndex = new Map();
-    for (const f of allFilms()) (titleIndex.get(f.n) || titleIndex.set(f.n, []).get(f.n)).push(f);
+    for (const f of allFilms()) for (const n of namesOf(f)) (titleIndex.get(n) || titleIndex.set(n, []).get(n)).push(f);
   }
   return titleIndex;
 }
@@ -72,8 +72,8 @@ function parse(raw) {
   return { raw, base: n.replace(/^the /, ""), year, part };
 }
 
-function scoreFilm(f, q, words) {
-  const t = f.n.replace(/^the /, "");
+function scoreFilm(f, q, words, name = f.n) {
+  const t = name.replace(/^the /, "");
   let s = f.pop / 5;
   if (t === q.base) s += 100;
   else if (t.startsWith(q.base)) s += 30;
@@ -99,11 +99,17 @@ function localMatch(raw) {
   const squashed = q.base.replace(/ /g, "");
   const cands = [];
   for (const f of allFilms()) {
-    const padded = ` ${f.n} `;
-    // "spiderman" should find "Spider-Man": also compare with spaces removed.
-    if (words.every((w) => padded.includes(` ${w}`)) || (squashed.length >= 5 && f.n.replace(/ /g, "").includes(squashed))) {
-      cands.push([scoreFilm(f, q, words), f]);
+    // A film can be found by its title or any of its other names ("se7en"); the best-scoring name counts.
+    let best = null;
+    for (const n of namesOf(f)) {
+      const padded = ` ${n} `;
+      // "spiderman" should find "Spider-Man": also compare with spaces removed.
+      if (words.every((w) => padded.includes(` ${w}`)) || (squashed.length >= 5 && n.replace(/ /g, "").includes(squashed))) {
+        const s = scoreFilm(f, q, words, n);
+        if (best === null || s > best) best = s;
+      }
     }
+    if (best !== null) cands.push([best, f]);
   }
   cands.sort((a, b) => b[0] - a[0]);
   const top = cands.slice(0, 8).map((c) => c[1]);
