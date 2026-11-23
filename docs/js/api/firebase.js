@@ -34,6 +34,8 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
     if (code === "unavailable") return new Error("You seem to be offline");
     return e instanceof Error ? e : new Error(String(e));
   };
+  // Messages from Cloud Functions can arrive with the HTTP status tacked on ("... [429]").
+  const plain = (msg) => String(msg || "Something went wrong. Try again.").replace(/\s*\[\d{3}\]\s*$/, "");
   const run = async (fn) => { try { return await fn(); } catch (e) { throw friendly(e); } };
   // Deleting a document that is already gone is refused by the rules; treat that as done.
   const remove = async (r) => {
@@ -253,7 +255,7 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
     /** Deletes this person's Movi data (and the sign-in itself if they use none of the other apps). */
     async deleteAccount() {
       requireUser();
-      await core.deleteMyData("movi");
+      try { await core.deleteMyData("movi"); } catch (e) { throw new Error(plain(e.message)); }
       await core.signOut().catch(() => {});
       forget();
     },
@@ -602,7 +604,7 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
         const res = await core.call("moviMatchFilms", { lines });
         return Array.isArray(res?.results) ? res.results : null;
       } catch (e) {
-        if (e.code === "resource-exhausted") api.matchError = e.message;
+        if (e.code === "resource-exhausted") api.matchError = plain(e.message);
         return null;
       }
     },
