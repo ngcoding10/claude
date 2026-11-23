@@ -47,7 +47,7 @@ export function renderJoin(view) {
         <p class="muted small">Movi profiles and rankings are visible to other signed-in members.</p>
         <p class="form-err" id="join-err" role="alert"></p>
         <button class="btn primary block" id="join-go">Join Movi</button>
-        <button type="button" class="linkish center-t" id="join-no">Not now (sign out)</button>
+        <button type="button" class="linkish center-t" id="join-no">Sign out</button>
       </form>
       <p class="legal">By joining, you agree to Movi's <a href="terms.html">Terms of service</a> and <a href="privacy.html">Privacy policy</a>.</p>
     </div></div>`;
@@ -62,7 +62,7 @@ export function renderJoin(view) {
     err.textContent = "";
     const name = u ? u.value : j.username;
     const shown = fixed ? j.displayName : form.display_name.value.trim();
-    if (!fixed && !shown) return (err.textContent = "Tell us your name");
+    if (!fixed && !shown) return (err.textContent = "Enter your name");
     if (!/^[a-z0-9_.]{3,20}$/.test(name)) return (err.textContent = "Pick a username with 3–20 lowercase letters, numbers, _ or .");
     const btn = $("#join-go");
     btn.disabled = true;
@@ -112,14 +112,13 @@ export function renderWelcome(view) {
       <div class="w-copy">
         <span class="logo big">movi</span>
         <h1>Rank every movie you've ever seen.</h1>
-        <p class="lead">No more stars. Pick which film you liked more, a few times, and Movi builds your personal 0–10 scores and a ranked list that's truly yours.</p>
+        <p class="lead">Pick the film you liked more. Movi turns your picks into 0–10 scores and a ranked list.</p>
         <ul class="w-feats">
-          <li>${ICON.rank}<span><b>Head-to-head ranking</b> — about 5 quick picks per film</span></li>
-          <li>${ICON.users}<span><b>Friends & feed</b> — see what they watch, like and comment</span></li>
-          <li>${ICON.sparkle}<span><b>Rec scores</b> — predicted scores from friends with your taste</span></li>
-          <li>${ICON.trophy}<span><b>Leaderboards, streaks & badges</b> — make watching a habit</span></li>
+          <li>${ICON.rank}<span><b>Head-to-head ranking</b>About 5 picks per film</span></li>
+          <li>${ICON.users}<span><b>Friends and feed</b>See what friends rank</span></li>
+          <li>${ICON.sparkle}<span><b>Rec scores</b>Predicted from friends with your taste</span></li>
+          <li>${ICON.trophy}<span><b>Streaks and badges</b>Make watching a habit</span></li>
         </ul>
-        <p class="muted small">${filmCount().toLocaleString()} films · Watchlist · Taste match · Watch together</p>
       </div>
       <div class="auth">
         ${api.supportsGoogle ? `<button class="btn google block" data-act="google">${GOOGLE_G} Continue with Google</button><div class="or"><span>or use email</span></div>` : ""}
@@ -141,7 +140,7 @@ export function renderWelcome(view) {
           ${demo ? "" : `<button type="button" class="linkish center-t" data-act="forgot">Forgot password?</button>`}
           ${demo ? "" : `<p class="muted small center-t">Use one of our other apps? Sign in the same way and you keep your username.</p>`}
         </form>`}
-        ${demo ? `<div class="demo-note">${ICON.lock}<span><b>Demo mode.</b> Accounts and rankings are saved only in this browser, alongside a sample community.</span></div>` : ""}
+        ${demo ? `<div class="demo-note">${ICON.lock}<span><b>Demo mode.</b> Everything is saved only in this browser.</span></div>` : ""}
         <a class="linkish center-t" href="#/discover">Browse without an account</a>
         <p class="legal">By continuing, you agree to Movi's <a href="terms.html">Terms of service</a> and <a href="privacy.html">Privacy policy</a>.</p>
       </div>
@@ -163,7 +162,7 @@ export function renderWelcome(view) {
     err.textContent = "";
     const fd = Object.fromEntries(new FormData(form));
     if (authTab === "signup") {
-      if (!fd.display_name.trim()) return (err.textContent = "Tell us your name");
+      if (!fd.display_name.trim()) return (err.textContent = "Enter your name");
       if (!/^[a-z0-9_.]{3,20}$/.test(fd.username)) return (err.textContent = "Pick a username with 3–20 lowercase letters, numbers, _ or .");
       if (!/^\S+@\S+\.\S+$/.test(fd.email)) return (err.textContent = "Enter a valid email");
       if ((fd.password || "").length < 6) return (err.textContent = "Password should be at least 6 characters");
@@ -219,15 +218,15 @@ export async function renderOnboarding(view) {
     const picks = onboardingPicks();
     view.innerHTML = `<div class="ob">${steps}
       <h1>Rank 3 films you've seen</h1>
-      <p class="muted">Pick films you know well. ${n ? `<b>${Math.min(n, 3)} of 3 done.</b>` : "It takes a few seconds each."}</p>
-      <div class="row-c"><button class="btn" data-act="quick-add">${ICON.search} Search for a film</button><a class="btn" href="#/lists/torank">${ICON.list} Paste a list of movies</a><button class="btn" data-act="ob-shuffle">${ICON.repeat} Show others</button>${n >= 3 ? `<button class="btn primary" data-act="ob-next">Next: find friends ${ICON.chevron}</button>` : `<button class="btn ghost" data-act="ob-next">Skip for now</button>`}</div>
-      <div class="grid quick mt-5">${picks.map((f) => cardHTML(f, { acts: `<div class="acts"><button data-act="rank" data-id="${f.id}">Seen it</button><button data-act="skip" data-id="${f.id}">Not seen</button></div>` })).join("")}</div></div>`;
+      <p class="muted">${n ? `<b>${Math.min(n, 3)} of 3 done</b>` : "Pick ones you know well."}</p>
+      <div class="row-c"><button class="btn" data-act="quick-add">${ICON.search} Search</button><a class="btn" href="#/lists/torank">${ICON.list} Paste a list</a><button class="btn" data-act="ob-shuffle">${ICON.repeat} Shuffle</button>${n >= 3 ? `<button class="btn primary" data-act="ob-next">Next ${ICON.chevron}</button>` : `<button class="btn ghost" data-act="ob-next">Skip</button>`}</div>
+      <div class="grid quick mt-5">${picks.map((f) => cardHTML(f, { acts: `<div class="acts"><button data-act="rank" data-id="${f.id}">Rank</button><button data-act="skip" data-id="${f.id}">Skip</button></div>` })).join("")}</div></div>`;
     return;
   }
-  view.innerHTML = `<div class="ob">${steps}<h1>Follow people</h1><p class="muted">Their rankings power your feed, rec scores and leaderboard.</p><div id="ob-people" class="ulist"></div>
-    <div class="row-c"><button class="btn primary" data-act="ob-done">Go to my feed ${ICON.chevron}</button></div></div>`;
+  view.innerHTML = `<div class="ob">${steps}<h1>Follow people</h1><p class="muted">Their rankings fill your feed.</p><div id="ob-people" class="ulist"></div>
+    <div class="row-c"><button class="btn primary" data-act="ob-done">Go to feed ${ICON.chevron}</button></div></div>`;
   const ps = (await api.listProfiles({ limit: 30 })).filter((p) => p.id !== S.me.id);
-  $("#ob-people").innerHTML = ps.map((p) => userRowHTML(p, followBtnHTML(p), `${p.ranked_count} ranked`)).join("") || `<p class="muted">No one else is here yet — invite your friends from your profile.</p>`;
+  $("#ob-people").innerHTML = ps.map((p) => userRowHTML(p, followBtnHTML(p), `${p.ranked_count} ranked`)).join("") || `<p class="muted">No one else is here yet. Invite friends from your profile.</p>`;
 }
 export function onboardingNext() { obStep = 2; renderOnboarding($("#view")); }
 export function onboardingDone() { finishOnboarding(); obStep = 1; location.hash = "#/feed"; }
@@ -246,7 +245,7 @@ export function renderSettings(view) {
       <label>${new Date().getFullYear()} goal<span class="field"><input name="yearly_goal" type="number" min="1" max="1000" value="${me.yearly_goal}"><span class="at">films</span></span></label>
       <p class="muted small">Your profile, rankings, watchlist and activity are visible to other signed-in members.${demo ? "" : " Your username is shared with our other apps that use the same sign-in."}</p>
       <p class="form-err" id="prof-err" role="alert"></p>
-      <button class="btn primary">Save profile</button>
+      <button class="btn primary">Save</button>
     </form>
     ${api.canChangePassword ? `<form class="panel-card form" id="pw-form" novalidate>
       <h3>Password</h3>
@@ -257,7 +256,7 @@ export function renderSettings(view) {
     <div class="panel-card form">
       <h3>Your data</h3>
       <p class="muted">Download everything you've ranked, noted and saved.</p>
-      <div class="settings"><button class="btn sm" data-act="export">Export my data</button></div>
+      <div class="settings"><button class="btn sm" data-act="export">Export data</button></div>
       <p class="legal left">Read the <a href="privacy.html">Privacy policy</a> and <a href="terms.html">Terms of service</a>.</p>
     </div>
     <div class="panel-card form">
@@ -266,7 +265,7 @@ export function renderSettings(view) {
       <div class="settings"><button class="btn sm" data-act="sign-out">${ICON.logout} Sign out</button><button class="btn sm danger" data-act="delete-account">${ICON.trash} Delete my Movi data</button>
       ${demo ? `<button class="btn sm ghost" data-act="reset-demo">Reset demo data</button>` : ""}</div>
     </div>
-    <p class="muted small center-t">Film data from Wikipedia (CC BY-SA). Posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB. ${demo ? "Running in demo mode." : ""}</p>`;
+    <p class="muted small center-t">Film data from Wikipedia (CC BY-SA). Posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>`;
   const pf = $("#prof-form");
   pf.avatar_hue.addEventListener("input", () => { $("#av-prev").innerHTML = avatarHTML({ ...me, display_name: pf.display_name.value, avatar_hue: Number(pf.avatar_hue.value) }, 72); });
   pf.username.addEventListener("input", () => { pf.username.value = pf.username.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""); });

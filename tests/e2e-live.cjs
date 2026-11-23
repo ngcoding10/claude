@@ -66,7 +66,7 @@ async function rankOpenFlow(page, feel, note) {
   await page.click('[data-act="flow-done"]');
   await page.waitForSelector('#flow[hidden]', { state: 'attached' });
 }
-// The Been list as the page shows it: [{ id, title, score }]
+// The Ranked list as the page shows it: [{ id, title, score }]
 const beenList = async (page) => {
   await go(page, '#/lists/been');
   await page.waitForSelector('.rowi');
@@ -456,10 +456,10 @@ const beenList = async (page) => {
     expect((await apiCall(C, 'return await api.getProfile(api.uid)')) === null, 'profile was recreated without asking');
     await go(A, `#/u/${uc}`);
     await A.waitForSelector('.empty h3');
-    // "Not now" signs out; signing in again still only offers to join
+    // "Sign out" on the join screen signs out; signing in again still only offers to join
     await C.click('#join-no');
     await C.waitForSelector('.welcome');
-    expect((await apiCall(C, 'return api.uid')) === null, '"Not now" did not sign out');
+    expect((await apiCall(C, 'return api.uid')) === null, 'join screen "Sign out" did not sign out');
     await C.evaluate(([email]) => window.__emuSignIn(email, 'Cara Tester'), [mailC]);
     await C.reload();
     await C.waitForSelector('#join-form', { timeout: 20000 });

@@ -10,8 +10,8 @@ import { sample, softmax } from "../variety.js";
 let boardTab = "following";
 
 export async function renderLeaderboard(view) {
-  view.innerHTML = `<div class="list-head"><div><h1>Leaderboard</h1><p class="sub-line">Who's ranked the most films.</p></div></div>
-    <div class="seg big" role="tablist">${["following", "everyone"].map((t) => `<button role="tab" class="${boardTab === t ? "on" : ""}" data-btab="${t}">${t === "following" ? "Friends" : "Everyone"}</button>`).join("")}</div>
+  view.innerHTML = `<div class="list-head"><div><h1>Leaderboard</h1><p class="sub-line">Most films ranked</p></div></div>
+    <div class="seg big" role="tablist">${["following", "everyone"].map((t) => `<button role="tab" class="${boardTab === t ? "on" : ""}" data-btab="${t}">${t === "following" ? "Following" : "Everyone"}</button>`).join("")}</div>
     <div id="board">${spinnerHTML()}</div>`;
   view.querySelectorAll("[data-btab]").forEach((b) => b.addEventListener("click", () => { boardTab = b.dataset.btab; withTransition(() => renderLeaderboard(view)); }));
   if (S.me) await reloadFollows().catch(() => {});
@@ -20,15 +20,15 @@ export async function renderLeaderboard(view) {
   const box = $("#board");
   if (!box) return;
   if (!S.me && api.membersOnly) {
-    box.innerHTML = emptyHTML({ title: "Sign in to see this on Movi", text: "The leaderboard is visible to signed-in members.", action: `<a class="btn primary" href="#/welcome">Sign in or join Movi</a>` });
+    box.innerHTML = emptyHTML({ title: "Sign in to see this on Movi", text: "The leaderboard is visible to signed-in members.", action: `<a class="btn primary" href="#/welcome">Sign in</a>` });
     return;
   }
   if (boardTab === "following" && list.length <= 1) {
-    box.innerHTML = emptyHTML({ title: "Follow people to compete", text: "Your friends leaderboard shows you and everyone you follow.", action: `<a class="btn primary" href="#/people">${ICON.users} Find people</a>` });
+    box.innerHTML = emptyHTML({ title: "Follow people to compete", text: "This board shows you and the people you follow.", action: `<a class="btn primary" href="#/people">${ICON.users} Find people</a>` });
     return;
   }
   const meIdx = list.findIndex((p) => p.id === S.me?.id);
-  box.innerHTML = `${meIdx >= 0 ? `<div class="banner accent">${ICON.trophy} You're #${meIdx + 1} ${boardTab === "following" ? "among friends" : "on Movi"} with ${list[meIdx].ranked_count} films ranked</div>` : ""}
+  box.innerHTML = `${meIdx >= 0 ? `<div class="banner accent">${ICON.trophy} You're #${meIdx + 1} ${boardTab === "following" ? "among people you follow" : "on Movi"}</div>` : ""}
     <ol class="board">${list.map((p, i) => `<li class="${p.id === S.me?.id ? "me" : ""}"><span class="place p${i + 1}">${i + 1}</span>
       <a class="urow-main" href="${userHref(p)}">${avatarHTML(p, 42)}<span><b>${esc(p.display_name || p.username)}</b>${demoTag(p)}<small>@${esc(p.username)}</small></span></a>
       <span class="count-big">${p.ranked_count}<small>ranked</small></span></li>`).join("")}</ol>`;
@@ -55,7 +55,7 @@ export async function renderNotifications(view) {
       const right = n.kind === "follow" ? followBtnHTML(a) : n.film_id != null && film(n.film_id) ? `<button class="nposter" ${target}>${posterHTML(film(n.film_id), "s")}</button>` : "";
       return `<div class="note-row ${n.read ? "" : "unread"}"><a href="${userHref(a)}">${avatarHTML(a, 40)}</a>
         <div><a class="uname" href="${userHref(a)}">${esc(a.display_name || a.username)}</a> ${NOTE_TEXT[n.kind](n)}<small>${timeAgo(n.created_at)}</small></div>${right}</div>`;
-    }).join("")}</div>` : emptyHTML({ title: "No notifications yet", text: "Likes, comments, new followers and recommendations show up here." })}`;
+    }).join("")}</div>` : emptyHTML({ title: "No notifications yet", text: "Likes, comments, follows and recs show up here." })}`;
   if (items.some((n) => !n.read)) {
     await api.markNotificationsRead().catch(() => {});
     refreshUnread();
@@ -63,9 +63,9 @@ export async function renderNotifications(view) {
 }
 
 export async function renderPeople(view) {
-  view.innerHTML = `<div class="list-head"><div><h1>Find people</h1><p class="sub-line">Follow friends to fill your feed, get rec scores and compare taste.</p></div></div>
+  view.innerHTML = `<div class="list-head"><div><h1>Find people</h1><p class="sub-line">Follow people to fill your feed and compare taste.</p></div></div>
     <a class="searchbar fake" href="#/search?tab=people">${ICON.search}<span>Search by name or username</span></a>
-    <div class="panel-card invite"><div><b>Invite friends to Movi</b><small>Share your profile link so they can follow you.</small></div><button class="btn sm primary" data-act="share-profile" data-username="${esc(S.me.username)}">${ICON.link} Copy invite link</button></div>
+    <div class="panel-card invite"><div><b>Invite friends</b><small>Share your profile link.</small></div><button class="btn sm primary" data-act="share-profile" data-username="${esc(S.me.username)}">${ICON.link} Copy link</button></div>
     <div id="pbox">${spinnerHTML()}</div>`;
   const all = await api.listProfiles({ limit: 100 });
   const mine = myRows();
@@ -83,24 +83,24 @@ export async function renderPeople(view) {
   const box = $("#pbox");
   if (!box) return;
   box.innerHTML = suggest.length
-    ? `<h2 class="h2m">Suggested for you</h2><div class="ulist">${suggest.map(({ p, common }) => userRowHTML(p, followBtnHTML(p), common ? `${common} films in common` : `${p.ranked_count} ranked`)).join("")}</div>`
+    ? `<h2 class="h2m">Suggested</h2><div class="ulist">${suggest.map(({ p, common }) => userRowHTML(p, followBtnHTML(p), common ? `${common} films in common` : `${p.ranked_count} ranked`)).join("")}</div>`
     : emptyHTML({ title: "You're following everyone", text: "Invite friends to grow your feed." });
 }
 
 // ---------- Watch together ----------
 const picked = new Set();
 export async function renderTogether(view) {
-  view.innerHTML = `<div class="list-head"><div><h1>Watch together</h1><p class="sub-line">Pick who's watching. Movi finds films nobody has seen that the group is likely to love.</p></div></div><div id="tbox">${spinnerHTML()}</div>`;
+  view.innerHTML = `<div class="list-head"><div><h1>Watch together</h1><p class="sub-line">Pick who's watching to find films none of you have seen.</p></div></div><div id="tbox">${spinnerHTML()}</div>`;
   const { following } = await api.getFollows(S.me.id);
   const friends = following.filter((f) => f.profile);
   const box = $("#tbox");
   if (!box) return;
   if (!friends.length) {
-    box.innerHTML = emptyHTML({ title: "Follow some friends first", text: "Watch together uses your friends' rankings and watchlists.", action: `<a class="btn primary" href="#/people">${ICON.users} Find people</a>` });
+    box.innerHTML = emptyHTML({ title: "Follow people first", text: "Watch together uses their rankings and watchlists.", action: `<a class="btn primary" href="#/people">${ICON.users} Find people</a>` });
     return;
   }
   box.innerHTML = `<div class="pick-people inline">${friends.map((f) => `<label class="pp ${picked.has(f.id) ? "on" : ""}">${avatarHTML(f.profile, 40)}<span>${esc(f.profile.display_name || f.profile.username)}<small>@${esc(f.profile.username)}</small></span><input type="checkbox" value="${esc(f.id)}" ${picked.has(f.id) ? "checked" : ""}></label>`).join("")}</div>
-    <div class="row-c"><button class="btn primary" id="t-go">${ICON.sparkle} Find films for us</button></div>
+    <div class="row-c"><button class="btn primary" id="t-go">${ICON.sparkle} Find films</button></div>
     <div id="t-out"></div>`;
   box.querySelectorAll(".pp input").forEach((c) => c.addEventListener("change", () => {
     c.checked ? picked.add(c.value) : picked.delete(c.value);
@@ -113,7 +113,7 @@ export async function renderTogether(view) {
 async function suggestTogether() {
   const out = $("#t-out");
   const ids = [...picked];
-  if (!ids.length) { out.innerHTML = `<p class="muted center-t">Pick at least one friend.</p>`; return; }
+  if (!ids.length) { out.innerHTML = `<p class="muted center-t">Pick at least one person.</p>`; return; }
   out.innerHTML = spinnerHTML("Comparing tastes…");
   const [rows, watches] = await Promise.all([api.rankingsOfUsers(ids), Promise.all(ids.map((id) => api.getWatchlist(id)))]);
   const G = genres().length;
@@ -136,6 +136,6 @@ async function suggestTogether() {
   // A varied pick from the group's best matches, so "Find films" gives new ideas each time.
   const ideas = sample(softmax(scored.slice(0, 90).map(([sc, f]) => [sc, f]), 1.2), 18);
   const top = ideas.map((f) => [0, f, wantCount.get(f.id) || 0]);
-  out.innerHTML = `<h2 class="h2m">Tonight's picks for ${members.length} of you</h2>
+  out.innerHTML = `<h2 class="h2m">Picks for ${members.length} of you</h2>
     <div class="grid">${top.map(([, f, w]) => cardHTML(f, { label: w ? `On ${w} watchlist${w === 1 ? "" : "s"}` : `${f.year}` })).join("")}</div>`;
 }

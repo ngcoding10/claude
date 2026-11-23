@@ -3,9 +3,15 @@ import { film, posterUrl } from "./films.js";
 import { bucketForScore } from "./model.js";
 import { S, scoreOf, isWatch } from "./state.js";
 
+// Posters fade in the first time they load. Ones already seen this visit are drawn straight away,
+// so redrawing a list never makes its posters blink.
+const seenPosters = new Set();
+window.moviPoster = (img) => { seenPosters.add(img.getAttribute("src")); img.classList.add("in"); };
+const posterImg = (url) => `<img src="${esc(url)}"${seenPosters.has(url) ? ' class="in"' : ""} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="moviPoster(this)" onerror="this.remove()">`;
+
 export function posterHTML(f, size = "m") {
   const h = hash(f.title) % 360;
-  const img = f.poster ? `<img src="${esc(posterUrl(f, size))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+  const img = f.poster ? posterImg(posterUrl(f, size)) : "";
   return `<div class="poster"><div class="fallback" aria-hidden="true" style="background:linear-gradient(160deg,hsl(${h} 45% 30%),hsl(${(h + 50) % 360} 55% 11%))">${esc(f.title)}<small>${f.year}</small></div>${img}</div>`;
 }
 
@@ -156,6 +162,6 @@ export function fillMissingPosters() {
     const f = Number.isInteger(id) ? film(id) : null;
     if (!f?.poster) return;
     const small = el.closest(".rowi,.qa-row,.nposter,.crow,.mposter,.pposter");
-    el.insertAdjacentHTML("beforeend", `<img src="${esc(posterUrl(f, small ? "s" : "m"))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`);
+    el.insertAdjacentHTML("beforeend", posterImg(posterUrl(f, small ? "s" : "m")));
   });
 }

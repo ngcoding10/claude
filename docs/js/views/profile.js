@@ -12,7 +12,7 @@ const PQ = { bucket: "all", genre: "", decade: "", sort: "rank", q: "", year: ""
 export async function renderProfile(view, username, tab = "rankings") {
   view.innerHTML = spinnerHTML();
   if (!S.me && api.membersOnly) {
-    view.innerHTML = emptyHTML({ title: "Sign in to see this on Movi", text: `@${esc(username)}'s profile and rankings are visible to signed-in members. Sign in or create an account and you'll come straight back here.`, action: `<a class="btn primary" href="#/welcome">Sign in or join Movi</a>` });
+    view.innerHTML = emptyHTML({ title: "Sign in to see this on Movi", text: `@${esc(username)}'s profile is visible to signed-in members. Sign in and you'll come straight back.`, action: `<a class="btn primary" href="#/welcome">Sign in</a>` });
     return;
   }
   const p = await api.getProfileByUsername(username);
@@ -54,7 +54,7 @@ export async function renderProfile(view, username, tab = "rankings") {
           <button data-act="show-follows" data-uid="${esc(p.id)}" data-kind="following"><b>${following.length}</b> following</button>
           ${place ? `<a href="#/leaderboard"><b>#${place}</b> on Movi</a>` : ""}
         </div>
-        ${match?.pct != null ? `<div class="match"><b>${match.pct}%</b> taste match <span class="muted">· ${match.common.length} films in common</span></div>` : match ? `<div class="match muted">Rank more of the same films to see your taste match (${match.common.length} in common so far)</div>` : ""}
+        ${match?.pct != null ? `<div class="match"><b>${match.pct}%</b> taste match <span class="muted">· ${match.common.length} films in common</span></div>` : match ? `<div class="match muted">Taste match needs more films in common (${match.common.length} so far)</div>` : ""}
       </div>
       <div class="pacts">
         ${own ? `<a class="btn sm" href="#/settings">${ICON.gear} Edit profile</a>` : followBtnHTML(p, "")}
@@ -66,7 +66,7 @@ export async function renderProfile(view, username, tab = "rankings") {
 
   const box = $("#ptab");
   if (tab === "rankings") {
-    if (!rows.length) { box.innerHTML = emptyHTML({ title: own ? "You haven't ranked anything yet" : "No rankings yet", action: own ? `<button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button>` : "" }); return; }
+    if (!rows.length) { box.innerHTML = emptyHTML({ title: own ? "Nothing ranked yet" : "No rankings yet", action: own ? `<button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button>` : "" }); return; }
     box.innerHTML = listControlsHTML(rows, PQ, "plc") + `<div class="rows" id="prow"></div>`;
     const draw = () => { $("#prow").innerHTML = listRowsHTML(filterRows(rows, PQ), { owner: true }); };
     bindListControls(box, PQ, draw);
@@ -88,7 +88,7 @@ function bars(items, max) {
 }
 
 function tasteHTML(rows, p, { followers, following, own }) {
-  if (!rows.length) return emptyHTML({ title: "No taste profile yet", text: own ? "Rank a few films to see your genres, decades and movie personality." : "" });
+  if (!rows.length) return emptyHTML({ title: "No taste profile yet", text: own ? "Rank a few films to see your taste." : "" });
   const avg = rows.reduce((t, r) => t + Number(r.score), 0) / rows.length;
   const st = streaks(rows);
   const goal = goalProgress(rows, p.yearly_goal);
@@ -111,12 +111,12 @@ function tasteHTML(rows, p, { followers, following, own }) {
       <div class="tile"><b>${st.current}<small>wk</small></b><span>Streak · best ${st.longest}</span></div>
       <div class="tile goal-tile"><span class="goal">${ring}<em>${goal.pct}%</em></span><div><b>${goal.done}/${goal.goal}</b><span>${goal.year} goal</span></div></div>
     </div>
-    ${sectionHTML("Top 4", "The very top of the list", `<div class="top4">${top4.map((f) => cardHTML(f)).join("")}</div>`)}
+    ${sectionHTML("Top 4", "", `<div class="top4">${top4.map((f) => cardHTML(f)).join("")}</div>`)}
     <div class="two">
       ${sectionHTML("Genres", "Films ranked · average score", bars(stats.slice(0, 8).map((e) => [e.g, e.n, `${e.n} · ${(e.sum / e.n).toFixed(1)}`]), maxG))}
-      ${sectionHTML("Decades", "When the films came out", bars(decs.slice(0, 8).map(([d, c]) => [`${d}s`, c, c]), maxD))}
+      ${sectionHTML("Decades", "", bars(decs.slice(0, 8).map(([d, c]) => [`${d}s`, c, c]), maxD))}
     </div>
-    ${places.size ? sectionHTML("Where they watch", "", bars([...places].sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v, v]), Math.max(...places.values()))) : ""}
+    ${places.size ? sectionHTML("Places", "", bars([...places].sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v, v]), Math.max(...places.values()))) : ""}
     ${sectionHTML("Badges", `${earned} of ${bs.length} earned`, `<div class="badges">${bs.map((b) => `<div class="bdg ${b.earned ? "on" : ""}" title="${esc(b.desc)}"><i>${b.earned ? ICON.trophy : ICON.lock}</i><b>${esc(b.name)}</b><small>${esc(b.desc)}</small>${b.earned ? "" : `<div class="track"><div class="fill" style="width:${(b.value / b.target) * 100}%"></div></div><small>${b.value} / ${b.target}</small>`}</div>`).join("")}</div>`)}`;
 }
 
@@ -135,9 +135,9 @@ function compareHTML(rows, p, match) {
   return `
     <div class="compare-hero"><div>${avatarHTML(S.me, 56)}<b>You</b></div><div class="big-match">${match?.pct != null ? `${match.pct}%` : "–"}<small>taste match</small></div><div>${avatarHTML(p, 56)}<b>${name}</b></div></div>
     <p class="muted center-t">${common.length} film${common.length === 1 ? "" : "s"} you've both ranked</p>
-    ${theirLoved.length ? sectionHTML(`${name} loved these — you haven't ranked them`, "", railHTML(theirLoved)) : ""}
+    ${theirLoved.length ? sectionHTML(`${name} loved, you haven't ranked`, "", railHTML(theirLoved)) : ""}
     ${common.length ? sectionHTML("You agree on", "", `<div class="crows">${agree.map(row).join("")}</div>`) : emptyHTML({ title: "Nothing in common yet", text: "Rank some of the same films to compare." })}
-    ${clash.length ? sectionHTML("Where you disagree", "", `<div class="crows">${clash.map(row).join("")}</div>`) : ""}`;
+    ${clash.length ? sectionHTML("You disagree on", "", `<div class="crows">${clash.map(row).join("")}</div>`) : ""}`;
 }
 
 export async function showFollows(uid, kind) {

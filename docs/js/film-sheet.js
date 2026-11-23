@@ -81,6 +81,8 @@ function rerender() {
   const entry = S.me ? S.entries.get(current.id) : null;
   if (form && entry) Object.assign(entry, readDetails(form));
   $("#sheet").innerHTML = sheetHTML(film(current.id), current, false);
+  // A redraw of the open page keeps its artwork steady instead of fading it in again.
+  $("#sheet").querySelectorAll(".backdrop img").forEach((i) => i.classList.add("in"));
   $("#sheet .panel").scrollTop = top;
   bindDetails(current.id);
   if (hadFocus) ((focusKey && $(`#sheet .panel ${focusKey}`)) || $("#sheet .close"))?.focus({ preventScroll: true });
@@ -108,29 +110,29 @@ function sheetHTML(f, data = null, animate = true) {
     const rec = recScore(fr, S.matches, data.stats);
     if (rec) {
       yours = `<div class="yourscore rec">${scoreHTML(rec.score, "lg")}<div><b>Rec score</b><small>${
-        rec.basis === "friends" ? `Predicted for you from ${rec.n} friend${rec.n === 1 ? "" : "s"}, weighted by taste match` : `Average from ${rec.n} member${rec.n === 1 ? "" : "s"}. Follow people to personalize it.`
+        rec.basis === "friends" ? `Predicted from ${rec.n} friend${rec.n === 1 ? "" : "s"}` : `Average of ${rec.n} member${rec.n === 1 ? "" : "s"}. Follow people to personalize it.`
       }</small></div></div>`;
     }
   }
 
   const acts = !S.me
-    ? `<a class="btn primary" href="#/welcome">${ICON.rank} Join Movi to rank it</a>`
+    ? `<a class="btn primary" href="#/welcome">${ICON.rank} Join to rank</a>`
     : s
       ? `<button class="btn primary" data-act="rank" data-id="${f.id}">${ICON.rank} Re-rank</button>
          <button class="btn" data-act="recommend" data-id="${f.id}">${ICON.send} Recommend</button>
-         <button class="btn ghost" data-act="share-film" data-id="${f.id}" aria-label="Share">${ICON.share}</button>
-         <button class="btn ghost danger" data-act="remove" data-id="${f.id}">Remove</button>`
-      : `<button class="btn primary" data-act="rank" data-id="${f.id}">${ICON.rank} I've seen it — rank it</button>
-         <button class="btn" data-act="${isWatch(f.id) ? "unwatch" : "watch"}" data-id="${f.id}">${isWatch(f.id) ? ICON.check + " On watchlist" : ICON.bookmark + " Want to watch"}</button>
+         <button class="btn icon" data-act="share-film" data-id="${f.id}" aria-label="Share">${ICON.share}</button>
+         <button class="btn ghost danger end" data-act="remove" data-id="${f.id}">Remove</button>`
+      : `<button class="btn primary" data-act="rank" data-id="${f.id}">${ICON.rank} Rank this film</button>
+         <button class="btn" data-act="${isWatch(f.id) ? "unwatch" : "watch"}" data-id="${f.id}">${isWatch(f.id) ? ICON.check + " Saved" : ICON.bookmark + " Save"}</button>
          <button class="btn" data-act="recommend" data-id="${f.id}">${ICON.send} Recommend</button>
-         <button class="btn ghost" data-act="share-film" data-id="${f.id}" aria-label="Share">${ICON.share}</button>`;
+         <button class="btn icon" data-act="share-film" data-id="${f.id}" aria-label="Share">${ICON.share}</button>`;
 
-  const plot = det ? (det.plot ? `<p class="plot">${esc(det.plot)}</p>` : `<p class="plot muted">No summary available.</p>`) : `<p class="plot muted">Loading details…</p>`;
+  const plot = det ? (det.plot ? `<p class="plot">${esc(det.plot)}</p>` : `<p class="plot muted">No summary available.</p>`) : `<p class="plot skel" role="status" aria-label="Loading details"><i></i><i></i><i></i></p>`;
   const cast = det?.cast?.length ? `<p class="cast"><b>Starring</b> ${esc(det.cast.slice(0, 8).join(", "))}</p>` : "";
   const wiki = det?.href ? `<a class="wiki" href="https://en.wikipedia.org/wiki/${encodeURI(det.href)}" target="_blank" rel="noopener">Read more on Wikipedia</a>` : "";
   const global = data?.stats
     ? `<div class="statline"><span>${ICON.globe}</span><b>${Number(data.stats.avg_score).toFixed(1)}</b> average from ${data.stats.n} member${data.stats.n == 1 ? "" : "s"}</div>`
-    : data ? `<div class="statline muted"><span>${ICON.globe}</span>No one on Movi has ranked this yet${S.me && !s ? " — be the first" : ""}.</div>` : "";
+    : data ? `<div class="statline muted"><span>${ICON.globe}</span>No one has ranked this yet</div>` : "";
 
   let people = "";
   if (data?.others?.length) {
@@ -146,12 +148,12 @@ function sheetHTML(f, data = null, animate = true) {
   const more = data ? (data.more ||= similarFilms(f, 14, { vary: true })) : [];
   return `<div class="scrim" data-act="close-film"${anim}></div>
     <div class="panel" role="dialog" aria-modal="true" aria-label="${esc(f.title)}"${anim}>
-      ${img ? `<div class="backdrop"><img src="${esc(img)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></div>` : ""}
+      ${img ? `<div class="backdrop"><img src="${esc(img)}" alt="" referrerpolicy="no-referrer" onload="this.classList.add('in')" onerror="this.remove()"></div>` : ""}
       <button class="close" data-act="close-film" aria-label="Close">${ICON.close}</button>
       <div class="film">${posterHTML(f, "l")}
-        <div class="body"><h2>${esc(f.title)}</h2>
-          <div class="facts"><span class="tag">${f.year}</span>${genreNames(f).map((g) => `<span class="tag">${esc(g)}</span>`).join("")}</div>
-          ${yours}<div class="acts">${acts}</div>${global}${plot}${cast}${wiki}</div></div>
+        <div class="fhead"><h2>${esc(f.title)}</h2>
+          <div class="facts"><span class="tag">${f.year}</span>${genreNames(f).map((g) => `<span class="tag">${esc(g)}</span>`).join("")}</div></div>
+        <div class="body">${yours}<div class="acts">${acts}</div>${global}${plot}${cast}${wiki}</div></div>
       ${people}
       ${more.length ? `<div class="film-more"><div class="section-head"><h2>More like this</h2></div>${railHTML(more)}</div>` : ""}
     </div>`;
@@ -164,7 +166,7 @@ export function detailsFormHTML(e, { compact = false } = {}) {
       <label class="check"><input type="checkbox" name="rewatch" ${e.rewatch ? "checked" : ""}> ${ICON.repeat} Rewatch</label></div>
     <div class="chips wrap" role="group" aria-label="Where did you watch it?">${PLACES.map((p) => `<button type="button" class="chip ${e.watched_where === p ? "on" : ""}" data-where="${p}">${p}</button>`).join("")}</div>
     <input type="text" name="watched_with" maxlength="120" aria-label="Who did you watch it with?" placeholder="Who did you watch it with?" value="${esc(e.watched_with || "")}">
-    <textarea class="note" name="note" maxlength="2000" aria-label="Note" placeholder="Add a note — what stuck with you?">${esc(e.note || "")}</textarea>
+    <textarea class="note" name="note" maxlength="2000" aria-label="Note" placeholder="Add a note">${esc(e.note || "")}</textarea>
   </form>`;
 }
 
@@ -210,13 +212,13 @@ export async function recommendDialog(filmId) {
   const seen = new Set();
   const people = [...following, ...followers].filter((x) => x.profile && !seen.has(x.id) && seen.add(x.id));
   if (!people.length) {
-    openModal(`<h2 class="dlg-title">Recommend ${esc(f.title)}</h2><p class="muted">Follow some people first, then you can send them films.</p><div class="dlg-acts"><a class="btn primary" href="#/people" data-act="modal-close-nav">Find people</a></div>`);
+    openModal(`<h2 class="dlg-title">Recommend ${esc(f.title)}</h2><p class="muted">Follow people to send them films.</p><div class="dlg-acts"><a class="btn primary" href="#/people" data-act="modal-close-nav">Find people</a></div>`);
     return;
   }
   const dlg = openModal(`<h2 class="dlg-title">Recommend ${esc(f.title)}</h2>
-    <p class="muted">They'll get a notification and it'll show up in their Recs.</p>
+    <p class="muted">It shows up in their Recs.</p>
     <div class="pick-people">${people.map((x) => `<label class="pp">${avatarHTML(x.profile, 36)}<span>${esc(x.profile.display_name || x.profile.username)}<small>@${esc(x.profile.username)}</small></span><input type="checkbox" value="${esc(x.id)}"></label>`).join("")}</div>
-    <textarea class="note" id="rec-msg" maxlength="280" aria-label="Message" placeholder="Why should they watch it? (optional)"></textarea>
+    <textarea class="note" id="rec-msg" maxlength="280" aria-label="Message" placeholder="Add a message (optional)"></textarea>
     <div class="dlg-acts"><button class="btn" data-act="modal-close">Cancel</button><button class="btn primary" id="rec-send">${ICON.send} Send</button></div>`);
   dlg.querySelector("#rec-send").addEventListener("click", async () => {
     const ids = [...dlg.querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value);

@@ -135,22 +135,22 @@ export function badges({ rows, followers = 0, following = 0 }) {
   const count = (fn) => rows.filter(fn).length;
   const st = streaks(rows);
   const defs = [
-    ["first", "First Take", "Rank your first film", n, 1],
-    ["ten", "Getting Into It", "Rank 10 films", n, 10],
+    ["first", "First take", "Rank your first film", n, 1],
+    ["ten", "Getting into it", "Rank 10 films", n, 10],
     ["fifty", "Cinephile", "Rank 50 films", n, 50],
-    ["hundred", "Film Buff", "Rank 100 films", n, 100],
+    ["hundred", "Film buff", "Rank 100 films", n, 100],
     ["twofifty", "Archivist", "Rank 250 films", n, 250],
     ["fivehundred", "Projectionist", "Rank 500 films", n, 500],
-    ["genres", "Genre Hopper", "Rank films in 10 genres", genreSet.size, 10],
-    ["decades", "Time Traveler", "Rank films from 6 decades", decades.size, 6],
-    ["classics", "Golden Age", "Rank 10 films from before 1960", count((r) => film(r.film_id).year < 1960), 10],
+    ["genres", "Genre hopper", "Rank films in 10 genres", genreSet.size, 10],
+    ["decades", "Time traveler", "Rank films from 6 decades", decades.size, 6],
+    ["classics", "Golden age", "Rank 10 films from before 1960", count((r) => film(r.film_id).year < 1960), 10],
     ["loved", "Superfan", "Love 25 films", count((r) => r.bucket === "loved"), 25],
-    ["critic", "Tough Crowd", "Dislike 10 films", count((r) => r.bucket === "disliked"), 10],
-    ["notes", "Critic's Notebook", "Write 10 notes", count((r) => (r.note || "").trim()), 10],
+    ["critic", "Tough crowd", "Dislike 10 films", count((r) => r.bucket === "disliked"), 10],
+    ["notes", "Critic's notebook", "Write 10 notes", count((r) => (r.note || "").trim()), 10],
     ["rewatch", "Rewatcher", "Log 5 rewatches", count((r) => r.rewatch), 5],
-    ["theater", "Front Row", "Watch 5 films in a theater", count((r) => r.watched_where === "Theater"), 5],
-    ["streak", "On a Roll", "Rank films 4 weeks in a row", st.longest, 4],
-    ["social", "Social Butterfly", "Follow 5 people", following, 5],
+    ["theater", "Front row", "Watch 5 films in a theater", count((r) => r.watched_where === "Theater"), 5],
+    ["streak", "On a roll", "Rank films 4 weeks in a row", st.longest, 4],
+    ["social", "Social butterfly", "Follow 5 people", following, 5],
     ["tastemaker", "Tastemaker", "Get 5 followers", followers, 5],
   ];
   return defs.map(([id, name, desc, value, target]) => ({ id, name, desc, value: Math.min(value, target), target, earned: value >= target }));

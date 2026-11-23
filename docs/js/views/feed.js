@@ -3,11 +3,13 @@ import { film } from "../films.js";
 import { BUCKETS, streaks, goalProgress } from "../model.js";
 import { api } from "../api/index.js";
 import { S, followingIds, myRows, scoreOf, isWatch } from "../state.js";
-import { posterHTML, avatarHTML, nameHTML, scoreHTML, emptyHTML, spinnerHTML, userRowHTML, demoTag, withTransition } from "../ui.js";
+import { posterHTML, avatarHTML, nameHTML, scoreHTML, emptyHTML, userRowHTML, demoTag, withTransition } from "../ui.js";
 
 let feedTab = "following";
 let cursor = null;
 let loading = false;
+
+const postSkeletonHTML = `<div class="post-skel" aria-hidden="true"><div class="sk-head"><i class="sk-av"></i><span><i></i><i></i></span></div><div class="sk-body"><i class="sk-poster"></i><i class="sk-score"></i></div></div>`;
 
 export async function renderFeed(view) {
   const rows = myRows();
@@ -19,17 +21,17 @@ export async function renderFeed(view) {
       <div class="feed-main">
         <div class="feed-head"><h1>Feed</h1>
           <div class="seg" role="tablist">${["following", "everyone"].map((t) => `<button role="tab" class="${feedTab === t ? "on" : ""}" data-feedtab="${t}">${t === "following" ? "Following" : "Everyone"}</button>`).join("")}</div></div>
-        <div id="posts">${spinnerHTML()}</div>
+        <div id="posts">${postSkeletonHTML.repeat(3)}</div>
         <div class="more" id="feed-more"></div>
       </div>
       <aside class="feed-side">
         <div class="panel-card week">
-          <div class="wk"><span class="flame ${st.activeThisWeek ? "on" : ""}">${ICON.flame}</span><div><b>${st.current} week${st.current === 1 ? "" : "s"}</b><small>${st.activeThisWeek ? "Streak is alive this week" : st.current ? "Rank a film to keep your streak" : "Rank a film to start a streak"}</small></div></div>
+          <div class="wk"><span class="flame ${st.activeThisWeek ? "on" : ""}">${ICON.flame}</span><div><b>${st.current} week${st.current === 1 ? "" : "s"}</b><small>${st.activeThisWeek ? "Streak safe" : st.current ? "Rank to keep your streak" : "Rank to start a streak"}</small></div></div>
           <div class="wk"><span class="goal">${ring(goal.pct)}<em>${goal.pct}%</em></span><div><b>${goal.done} of ${goal.goal}</b><small>${goal.year} goal</small></div></div>
-          <button class="btn primary block" data-act="quick-add">${ICON.plus} Rank a film</button>
-          ${S.backlog.length ? `<a class="btn block" href="#/lists/torank">${ICON.list} ${S.backlog.length} film${S.backlog.length === 1 ? "" : "s"} waiting to be ranked</a>` : ""}
+          <button class="btn primary block desktop-only" data-act="quick-add">${ICON.plus} Rank a film</button>
+          ${S.backlog.length ? `<a class="btn block" href="#/lists/torank">${ICON.list} ${S.backlog.length} film${S.backlog.length === 1 ? "" : "s"} to rank</a>` : ""}
         </div>
-        <div class="panel-card" id="suggest"><h3>People to follow</h3><div class="muted">Loading…</div></div>
+        <div class="panel-card" id="suggest"><h3>People to follow</h3><div class="skel-rows" role="status" aria-label="Loading"><i></i><i></i><i></i></div></div>
       </aside>
     </div>`;
   view.querySelectorAll("[data-feedtab]").forEach((b) => b.addEventListener("click", () => { feedTab = b.dataset.feedtab; withTransition(() => renderFeed(view)); }));
@@ -56,8 +58,8 @@ async function loadPosts(reset) {
   if (reset) box.innerHTML = "";
   if (reset && !items.length) {
     box.innerHTML = feedTab === "following"
-      ? emptyHTML({ title: "Your feed is quiet", text: followingIds().length ? "The people you follow haven't ranked anything yet." : "Follow people to see what they're watching and how they rank it.", action: `<div class="row-c"><a class="btn primary" href="#/people">${ICON.users} Find people</a><button class="btn" data-feedtab-go="everyone">See everyone</button></div>` })
-      : emptyHTML({ title: "Nothing here yet", text: "Be the first to rank something.", action: `<button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button>` });
+      ? emptyHTML({ title: "Your feed is quiet", text: followingIds().length ? "The people you follow haven't ranked anything yet." : "Follow people to see what they rank.", action: `<div class="row-c"><a class="btn primary" href="#/people">${ICON.users} Find people</a><button class="btn" data-feedtab-go="everyone">See everyone</button></div>` })
+      : emptyHTML({ title: "Nothing here yet", text: "Be the first to rank a film.", action: `<button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button>` });
     box.querySelector("[data-feedtab-go]")?.addEventListener("click", () => { feedTab = "everyone"; renderFeed($("#view")); });
   }
   box.insertAdjacentHTML("beforeend", items.map(postHTML).join(""));
@@ -81,7 +83,7 @@ export function postHTML(a) {
   const saveBtn = S.me && !mine && !myS
     ? `<button class="pbtn ${isWatch(f.id) ? "on" : ""}" data-act="${isWatch(f.id) ? "unwatch" : "watch"}" data-id="${f.id}" aria-label="Watchlist">${ICON.bookmark}<span>${isWatch(f.id) ? "Saved" : "Save"}</span></button>`
     : myS && !mine ? `<span class="pmine">You: ${scoreHTML(myS.score)}</span>` : "";
-  return `<article class="post" data-post="${esc(a.id)}">
+  return `<article class="post ${a.note ? "" : "compact"}" data-post="${esc(a.id)}">
     <header>${avatarHTML(p, 42)}<div class="pwho">${nameHTML(p)} ${demoTag(p)}<span class="pverb">${verb}</span>${meta}</div>
       <span class="ptime">${timeAgo(a.created_at)}</span></header>
     <div class="pbody">
@@ -104,6 +106,7 @@ export async function toggleLike(btn) {
   const span = btn.querySelector("span");
   const n = Number(span.textContent || 0) + (on ? 1 : -1);
   btn.classList.toggle("on", on);
+  btn.classList.toggle("pop", on);
   btn.setAttribute("aria-pressed", on);
   span.textContent = n || "";
   btn.setAttribute("aria-label", `Like (${n})`);
@@ -119,7 +122,7 @@ export async function toggleComments(btn) {
   const box = post.querySelector(".cmts");
   if (!box.hidden) { box.hidden = true; return; }
   box.hidden = false;
-  box.innerHTML = `<div class="muted">Loading…</div>`;
+  box.innerHTML = `<div class="skel-rows" role="status" aria-label="Loading comments"><i></i></div>`;
   await drawComments(post);
 }
 
@@ -129,7 +132,7 @@ async function drawComments(post) {
   const list = await api.getComments(id);
   const owner = post.querySelector(".delete-post, [data-act=delete-post]") !== null;
   box.innerHTML = list.map((c) => `<div class="cmt">${avatarHTML(c.profile, 28)}<div><b>${c.profile ? nameHTML(c.profile) : "Someone"}</b> ${esc(c.body)}<small>${timeAgo(c.created_at)}${c.user_id === S.me?.id || owner ? ` · <button class="linkish" data-act="del-comment" data-id="${esc(c.id)}">Delete</button>` : ""}</small></div></div>`).join("")
-    + (S.me ? `<form class="cmt-form"><input name="body" maxlength="500" aria-label="Add a comment" placeholder="Add a comment…" autocomplete="off" required><button class="btn sm primary">Post</button></form>` : `<p class="muted">Sign in to comment.</p>`);
+    + (S.me ? `<form class="cmt-form"><input name="body" maxlength="500" aria-label="Add a comment" placeholder="Add a comment" autocomplete="off" required><button class="btn sm primary">Post</button></form>` : `<p class="muted">Sign in to comment.</p>`);
   const form = box.querySelector("form");
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -162,7 +165,7 @@ async function loadSuggestions() {
   if (!box) return;
   const exclude = new Set([S.me.id, ...S.following]);
   const ps = (await api.listProfiles({ limit: 40 })).filter((p) => !exclude.has(p.id)).slice(0, 5);
-  box.innerHTML = `<h3>People to follow</h3>${ps.length ? ps.map((p) => userRowHTML(p, followBtnHTML(p), `${p.ranked_count} ranked`)).join("") : `<p class="muted">You're following everyone. Invite friends to Movi!</p>`}
+  box.innerHTML = `<h3>People to follow</h3>${ps.length ? ps.map((p) => userRowHTML(p, followBtnHTML(p), `${p.ranked_count} ranked`)).join("") : `<p class="muted">You're following everyone.</p>`}
     <a class="link" href="#/people">See all</a>`;
 }
 

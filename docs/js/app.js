@@ -69,7 +69,7 @@ async function route() {
   await draw(current);
 }
 
-// Switching tabs within one screen (My Lists tabs, a profile's tabs) swaps content in place.
+// Switching tabs within one screen (My lists tabs, a profile's tabs) swaps content in place.
 let drawn = null;
 const isTabSwitch = (a, b) => a && a.name === b.name && ["lists", "u"].includes(b.name) && (b.name !== "u" || a.args[0] === b.args[0]);
 
@@ -147,7 +147,7 @@ function renderShell(active) {
   const tab = (key, href, icon, label) => `<a href="${href}" class="${active === key ? "active" : ""}" data-nav="${key}" ${active === key ? 'aria-current="page"' : ""}>${icon}<span>${label}</span></a>`;
   const bell = `<a class="iconbtn bell ${active === "notifications" ? "active" : ""}" href="#/notifications" aria-label="Notifications">${ICON.bell}${S.unread ? `<b>${S.unread > 9 ? "9+" : S.unread}</b>` : ""}</a>`;
   $("#topnav").innerHTML = me
-    ? `${tab("feed", "#/feed", ICON.home, "Feed")}${tab("discover", "#/discover", ICON.compass, "Discover")}${tab("lists", "#/lists", ICON.list, "My Lists")}${tab("leaderboard", "#/leaderboard", ICON.trophy, "Leaderboard")}`
+    ? `${tab("feed", "#/feed", ICON.home, "Feed")}${tab("discover", "#/discover", ICON.compass, "Discover")}${tab("lists", "#/lists", ICON.list, "My lists")}${tab("leaderboard", "#/leaderboard", ICON.trophy, "Leaderboard")}`
     : `${tab("discover", "#/discover", ICON.compass, "Discover")}${tab("search", "#/search", ICON.search, "Search")}${tab("leaderboard", "#/leaderboard", ICON.trophy, "Leaderboard")}`;
   $("#topright").innerHTML = me
     ? `<a class="iconbtn ${active === "search" ? "active" : ""}" href="#/search" aria-label="Search">${ICON.search}</a>
@@ -211,7 +211,7 @@ async function act(name, el) {
     case "watch-from":
       if (!requireMe()) return;
       await addWatch(id, el.dataset.from || null);
-      toast(`Saved ${film(id).title} to your watchlist`);
+      toast("Saved to watchlist");
       document.querySelectorAll(`.pbtn[data-id="${id}"][data-act="watch"]`).forEach((b) => { b.dataset.act = "unwatch"; b.classList.add("on"); b.querySelector("span").textContent = "Saved"; });
       return softRefresh();
     case "unwatch":
@@ -221,7 +221,7 @@ async function act(name, el) {
       return softRefresh();
     case "skip": skipFilm(id); return softRefresh();
     case "remove": {
-      const ok = await confirmDialog({ title: `Remove ${film(id).title}?`, text: "It comes off your list and the scores of everything below it shift up.", ok: "Remove", danger: true });
+      const ok = await confirmDialog({ title: `Remove ${film(id).title}?`, text: "It leaves your list and the films below it move up.", ok: "Remove", danger: true });
       if (!ok) return;
       await removeRanking(id);
       toast("Removed from your list");
@@ -237,7 +237,7 @@ async function act(name, el) {
     case "comments": return toggleComments(el);
     case "del-comment": return deleteComment(el);
     case "delete-post": {
-      if (!(await confirmDialog({ title: "Delete this post?", text: "It's removed from feeds along with its likes and comments. Your ranking stays.", ok: "Delete", danger: true }))) return;
+      if (!(await confirmDialog({ title: "Delete this post?", text: "Its likes and comments go too. Your ranking stays.", ok: "Delete", danger: true }))) return;
       await api.deleteActivity(el.dataset.id);
       removeItem(el.closest(".post"));
       return;
@@ -302,7 +302,7 @@ async function act(name, el) {
       return go("#/welcome");
     case "delete-account": return deleteAccount();
     case "reset-demo":
-      if (!(await confirmDialog({ title: "Reset demo data?", text: "Deletes every demo account and ranking in this browser and starts fresh.", ok: "Reset", danger: true }))) return;
+      if (!(await confirmDialog({ title: "Reset demo data?", text: "Deletes every demo account and ranking in this browser.", ok: "Reset", danger: true }))) return;
       api.resetDemo();
       location.hash = "#/welcome";
       location.reload();

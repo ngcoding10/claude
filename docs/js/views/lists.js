@@ -72,9 +72,9 @@ export function bindListControls(root, Q, redraw) {
 }
 
 export async function renderLists(view, tab = "been") {
-  const tabs = { been: `Been · ${rankedCount()}`, torank: `To rank · ${S.backlog.length}`, want: `Want to watch · ${S.watch.length}`, recs: "Recs for you" };
-  view.innerHTML = `<div class="list-head"><div><h1>My Lists</h1></div>
-      <div class="settings"><button class="btn sm" data-act="share-list">${ICON.share} Share top 10</button><button class="btn sm primary" data-act="quick-add">${ICON.plus} Rank a film</button></div></div>
+  const tabs = { been: `Ranked · ${rankedCount()}`, torank: `To rank · ${S.backlog.length}`, want: `Watchlist · ${S.watch.length}`, recs: "Recs" };
+  view.innerHTML = `<div class="list-head"><div><h1>My lists</h1></div>
+      <div class="settings"><button class="btn sm" data-act="share-list">${ICON.share} Share top 10</button><button class="btn sm primary desktop-only" data-act="quick-add">${ICON.plus} Rank a film</button></div></div>
     <div class="seg big" role="tablist">${Object.entries(tabs).map(([k, v]) => `<a role="tab" class="${tab === k ? "on" : ""}" href="#/lists/${k}">${v}</a>`).join("")}</div>
     <div id="list-body"></div>`;
   const body = $("#list-body");
@@ -83,7 +83,7 @@ export async function renderLists(view, tab = "been") {
   if (tab === "recs") return renderRecs(body);
   const rows = myRows();
   if (!rows.length) {
-    body.innerHTML = emptyHTML({ title: "Your list is empty", text: "Rank a film you've seen and it lands here with a score. Seen a lot? Add them all at once and rank later.", action: `<div class="row-c"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button><a class="btn" href="#/lists/torank">Add many at once</a></div>` });
+    body.innerHTML = emptyHTML({ title: "Your list is empty", text: "Films you rank land here with a score.", action: `<div class="row-c"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button><a class="btn" href="#/lists/torank">Paste a list</a></div>` });
     return;
   }
   body.innerHTML = listControlsHTML(rows, LQ) + `<div class="rows" id="rows"></div>`;
@@ -94,13 +94,12 @@ export async function renderLists(view, tab = "been") {
 
 function renderWant(body) {
   if (!S.watch.length) {
-    body.innerHTML = emptyHTML({ title: "Nothing saved yet", text: "Tap “Save” or the bookmark on any film to keep it here.", action: `<a class="btn primary" href="#/discover">Find films</a>` });
+    body.innerHTML = emptyHTML({ title: "Nothing saved yet", text: "Save a film to keep it here.", action: `<a class="btn primary" href="#/discover">Find films</a>` });
     return;
   }
-  body.innerHTML = `<p class="muted mt-3">Watched one? Tap “Watched” to rank it.</p>
-    <div class="grid quick mt-4">${S.watch.map((w) => cardHTML(film(w.film_id), {
+  body.innerHTML = `<div class="grid quick mt-4">${S.watch.map((w) => cardHTML(film(w.film_id), {
       label: w.from_user ? "Recommended" : `Saved ${timeAgo(w.created_at)}`,
-      acts: `<div class="acts"><button data-act="rank" data-id="${w.film_id}">Watched</button><button data-act="unwatch" data-id="${w.film_id}">Remove</button></div>`,
+      acts: `<div class="acts"><button data-act="rank" data-id="${w.film_id}">Rank</button><button data-act="unwatch" data-id="${w.film_id}">Remove</button></div>`,
     })).join("")}</div>`;
 }
 
@@ -109,7 +108,7 @@ async function renderRecs(body) {
   let recs = [];
   try { recs = await api.getRecsForMe(); } catch (e) { body.innerHTML = emptyHTML({ title: "Couldn't load recs", text: esc(e.message) }); return; }
   if (!recs.length) {
-    body.innerHTML = emptyHTML({ title: "No recommendations yet", text: "When friends send you a film, it shows up here. You can send them one from any film page." });
+    body.innerHTML = emptyHTML({ title: "No recs yet", text: "Films your friends send you show up here." });
     return;
   }
   body.innerHTML = `<div class="recs">${recs.map((r) => {
@@ -122,7 +121,7 @@ async function renderRecs(body) {
         <div class="rec-from">${avatarHTML(r.profile, 28)} ${r.profile ? nameHTML(r.profile) : "Someone"} <span class="muted">recommended · ${timeAgo(r.created_at)}</span></div>
         <button class="ftitle big" data-film="${f.id}">${esc(f.title)} <span class="muted">${f.year}</span></button>
         ${r.message ? `<p class="rec-msg">“${esc(r.message)}”</p>` : ""}
-        <div class="rec-acts">${s ? `<span class="pmine">You ranked it ${scoreHTML(s.score)}</span>` : `<button class="btn sm primary" data-act="rank" data-id="${f.id}">Watched it</button><button class="btn sm" data-act="watch-from" data-id="${f.id}" data-from="${esc(r.from_user)}">${ICON.bookmark} Save</button>`}
+        <div class="rec-acts">${s ? `<span class="pmine">You ranked it ${scoreHTML(s.score)}</span>` : `<button class="btn sm primary" data-act="rank" data-id="${f.id}">Rank</button><button class="btn sm" data-act="watch-from" data-id="${f.id}" data-from="${esc(r.from_user)}">${ICON.bookmark} Save</button>`}
           <button class="btn sm ghost" data-act="dismiss-rec" data-id="${esc(r.id)}">Dismiss</button></div>
       </div></div>`;
   }).join("")}</div>`;
@@ -132,11 +131,11 @@ export async function shareList() {
   const rows = myRows().slice(0, 10);
   if (!rows.length) return toast("Rank some films first");
   const url = `${location.origin}${location.pathname}#/u/${encodeURIComponent(S.me.username)}`;
-  const text = `My Movi top ${rows.length}:\n` + rows.map((r, i) => `${i + 1}. ${film(r.film_id).title} (${film(r.film_id).year}) — ${r.score.toFixed(1)}`).join("\n") + `\n${url}`;
+  const text = `My Movi top ${rows.length}:\n` + rows.map((r, i) => `${i + 1}. ${film(r.film_id).title} (${film(r.film_id).year}) · ${r.score.toFixed(1)}`).join("\n") + `\n${url}`;
   try {
     if (navigator.share) return await navigator.share({ text });
   } catch (e) {
     if (e.name === "AbortError") return;
   }
-  toast((await copyText(text)) ? "Top 10 copied to clipboard" : "Couldn't copy — try again");
+  toast((await copyText(text)) ? "Top 10 copied" : "Couldn't copy. Try again.");
 }

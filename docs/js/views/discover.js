@@ -9,11 +9,11 @@ import { genreAffinity } from "../model.js";
 import { followBtnHTML } from "./feed.js";
 
 const GENRE_RAILS = [
-  ["Science Fiction", "Sci-fi to rank"], ["Animated", "Animation favorites"], ["Horror", "Horror"], ["Comedy", "Comedies"],
-  ["Crime", "Crime & gangsters"], ["Romance", "Romance"], ["Superhero", "Superheroes"], ["Western", "Westerns"],
+  ["Science Fiction", "Sci-fi"], ["Animated", "Animation"], ["Horror", "Horror"], ["Comedy", "Comedies"],
+  ["Crime", "Crime"], ["Romance", "Romance"], ["Superhero", "Superheroes"], ["Western", "Westerns"],
   ["Thriller", "Thrillers"], ["Drama", "Dramas"], ["Action", "Action"], ["Adventure", "Adventures"], ["Fantasy", "Fantasy"],
   ["Mystery", "Mysteries"], ["Musical", "Musicals"], ["War", "War films"], ["Noir", "Film noir"], ["Biography", "True stories"],
-  ["Family", "Family night"], ["Sports", "Sports films"],
+  ["Family", "Family"], ["Sports", "Sports films"],
 ];
 const RAILS_PER_VISIT = 6;
 
@@ -29,14 +29,14 @@ export async function renderDiscover(view) {
   const n = me ? rankedCount() : 0;
   const hero = !me
     ? `<div class="hero"><h1>Stop rating movies.<br>Start <em>ranking</em> them.</h1>
-        <p>Pick which film you liked more, a few times, and Movi builds your 0–10 scores and ranked list. See what your friends think, compare taste, and find what to watch next.</p>
-        <div class="row"><a class="btn primary" href="#/welcome">Create your account</a><a class="btn" href="#/search">Browse ${filmCount().toLocaleString()} films</a></div></div>`
+        <p>Pick the film you liked more and Movi builds your 0–10 scores. Compare with friends and find what to watch next.</p>
+        <div class="row"><a class="btn primary" href="#/welcome">Create account</a><a class="btn" href="#/search">Browse ${filmCount().toLocaleString()} films</a></div></div>`
     : n === 0
       ? `<div class="hero"><h1>Let's build your list, <em>${esc(me.display_name || me.username)}</em>.</h1>
-          <p>Start with films you know well. Each one takes a few seconds: a gut check, then a couple of head-to-heads.</p>
-          <div class="row"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button><a class="btn" href="#/lists/torank">${ICON.list} Add movies you've seen</a></div></div>`
-      : `<div class="hero compact"><div><h1>Discover</h1><p>${rankedCount()} ranked · ${avgScore().toFixed(1)} average. Find your next favorite.</p></div>
-          <div class="row"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button>${S.backlog.length ? `<a class="btn" href="#/lists/torank">${ICON.list} ${S.backlog.length} to rank</a>` : `<a class="btn" href="#/lists/torank">${ICON.list} Add movies you've seen</a>`}<a class="btn" href="#/together">${ICON.users} Watch together</a></div></div>`;
+          <p>Start with films you know well. Each takes a few seconds.</p>
+          <div class="row"><button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button><a class="btn" href="#/lists/torank">${ICON.list} Paste a list</a></div></div>`
+      : `<div class="hero compact"><div><h1>Discover</h1><p>${rankedCount()} ranked · ${avgScore().toFixed(1)} average</p></div>
+          <div class="row"><button class="btn primary desktop-only" data-act="quick-add">${ICON.plus} Rank a film</button>${S.backlog.length ? `<a class="btn" href="#/lists/torank">${ICON.list} ${S.backlog.length} to rank</a>` : `<a class="btn" href="#/lists/torank">${ICON.list} Paste a list</a>`}<a class="btn" href="#/together">${ICON.users} Watch together</a></div></div>`;
 
   beginPage();
   if (me) pickQuick();
@@ -46,10 +46,10 @@ export async function renderDiscover(view) {
   view.innerHTML = `${hero}
     <a class="searchbar fake" href="#/search">${ICON.search}<span>Search films or people</span></a>
     ${me ? `<section class="section quick" id="quick"></section>` : ""}
-    ${me && n >= 3 ? sectionHTML("Recommended for you", "Based on the genres you score highest", railHTML(recommendFor(18))) : ""}
+    ${me && n >= 3 ? sectionHTML("Recommended for you", "Based on your top genres", railHTML(recommendFor(18))) : ""}
     <div id="friends-trending"></div>
     <div id="top-movi"></div>
-    ${topLoved ? sectionHTML(`Because you loved ${esc(topLoved.title)}`, "Similar genres and era", railHTML(similarFilms(topLoved, 16, { vary: true }))) : ""}
+    ${topLoved ? sectionHTML(`Because you loved ${esc(topLoved.title)}`, "", railHTML(similarFilms(topLoved, 16, { vary: true }))) : ""}
     ${pickGenreRails().map(([g, t]) => sectionHTML(t, "", railHTML(sample(byPopularity(topByGenre(g, 160, exclude), 1.3), 20)), `<a class="link" href="#/search?genre=${encodeURIComponent(g)}">See all</a>`)).join("")}`;
   if (me) drawQuick();
   loadTrending();
@@ -70,8 +70,8 @@ function pickQuick() {
 function drawQuick() {
   const el = $("#quick");
   if (!el) return;
-  const acts = (f) => ({ acts: `<div class="acts"><button data-act="rank" data-id="${f.id}">Seen it</button><button data-act="watch" data-id="${f.id}">Save</button><button data-act="skip" data-id="${f.id}" aria-label="Not interested">Skip</button></div>` });
-  el.innerHTML = `<div class="section-head"><div><h2>Seen any of these?</h2><p>Rank what you've watched, save what you want to. The fastest way to build your list.</p></div>
+  const acts = (f) => ({ acts: `<div class="acts"><button data-act="rank" data-id="${f.id}">Rank</button><button data-act="watch" data-id="${f.id}">Save</button><button data-act="skip" data-id="${f.id}" aria-label="Not interested">Skip</button></div>` });
+  el.innerHTML = `<div class="section-head"><div><h2>Seen any of these?</h2><p>Rank what you've seen, save what you haven't.</p></div>
       <button class="btn sm ghost" data-act="shuffle-quick">${ICON.repeat} Shuffle</button></div>
     <div class="grid">${quickIds.map((id) => cardHTML(film(id), acts(film(id)))).join("")}</div>`;
 }
@@ -99,7 +99,7 @@ async function loadTrending() {
   const topNew = top.filter((t) => !hide.has(t.film_id));
   const tbox = $("#top-movi");
   if (tbox && topNew.length) {
-    tbox.innerHTML = sectionHTML("Top rated on Movi", "Highest average score across members", railHTML(sample(topNew.filter((t) => film(t.film_id)).map((t) => [Math.exp((Number(t.avg_score) - Number(topNew[0].avg_score)) / 1.2) * Math.log2(1 + Number(t.n)), film(t.film_id)]), 18), (f) => {
+    tbox.innerHTML = sectionHTML("Top rated on Movi", "", railHTML(sample(topNew.filter((t) => film(t.film_id)).map((t) => [Math.exp((Number(t.avg_score) - Number(topNew[0].avg_score)) / 1.2) * Math.log2(1 + Number(t.n)), film(t.film_id)]), 18), (f) => {
       const t = top.find((x) => x.film_id === f.id);
       return { label: `${Number(t.avg_score).toFixed(1)} avg · ${t.n} members` };
     }));
@@ -116,7 +116,7 @@ async function loadTrending() {
   }
   const list = [...agg.values()].sort((a, b) => b.n - a.n || b.sum / b.n - a.sum / a.n).slice(0, 120);
   if (list.length) {
-    fbox.innerHTML = sectionHTML("Trending with friends", `What the ${followingIds().length} people you follow ranked lately`, railHTML(sample(list.map((e) => [Math.pow(e.n, 1.3) * (e.sum / e.n / 10 + 0.3), film(e.id)]), 16), (f) => {
+    fbox.innerHTML = sectionHTML("Trending with friends", "Ranked lately by people you follow", railHTML(sample(list.map((e) => [Math.pow(e.n, 1.3) * (e.sum / e.n / 10 + 0.3), film(e.id)]), 16), (f) => {
       const e = agg.get(f.id);
       return { label: `${e.n} friend${e.n === 1 ? "" : "s"} · ${(e.sum / e.n).toFixed(1)} avg` };
     }));
@@ -132,7 +132,7 @@ export function renderSearch(view, params) {
   const decades = [];
   for (let d = 2020; d >= 1900; d -= 10) decades.push(d);
   view.innerHTML = `
-    <h1 class="sr-only">Search</h1><div class="searchbar">${ICON.search}<input id="q" type="search" aria-label="${SQ.tab === "films" ? "Search films" : "Search people"}" placeholder="${SQ.tab === "films" ? `Search ${filmCount().toLocaleString()} films by title or year` : "Search people by name or username"}" autocomplete="off" value="${esc(SQ.q)}"></div>
+    <h1 class="sr-only">Search</h1><div class="searchbar">${ICON.search}<input id="q" type="search" aria-label="${SQ.tab === "films" ? "Search films" : "Search people"}" placeholder="${SQ.tab === "films" ? "Search films by title or year" : "Search by name or username"}" autocomplete="off" value="${esc(SQ.q)}"></div>
     <div class="seg mt-3" role="tablist">${["films", "people"].map((t) => `<button role="tab" class="${SQ.tab === t ? "on" : ""}" data-stab="${t}">${t === "films" ? "Films" : "People"}</button>`).join("")}</div>
     ${SQ.tab === "films" ? `<div class="filters">
       <select id="decade" aria-label="Decade"><option value="">Any decade</option>${decades.map((d) => `<option value="${d}" ${SQ.decade == d ? "selected" : ""}>${d}s</option>`).join("")}</select>
@@ -180,7 +180,7 @@ export async function drawResults() {
     ? `<div class="count">${all.length.toLocaleString()} film${all.length === 1 ? "" : "s"}</div>
        <div class="grid">${shown.map((f) => cardHTML(f)).join("")}</div>
        ${shown.length < all.length ? `<div class="more"><button class="btn" data-act="more">Show more</button></div>` : ""}`
-    : emptyHTML({ title: "No films found", text: "Try a shorter title, or clear the genre and decade filters." });
+    : emptyHTML({ title: "No films found", text: "Try a shorter title or clear the filters." });
 }
 export function moreResults() { SQ.page++; drawResults(); }
 

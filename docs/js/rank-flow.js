@@ -108,7 +108,7 @@ async function finish() {
   const e = S.entries.get(F.id);
   if (!e.watched_on && !F.wasRanked) e.watched_on = today();
   render();
-  sparks();
+  navigator.vibrate?.([12, 40, 18]);
 }
 
 async function complete(next = null) {
@@ -141,14 +141,14 @@ function render() {
   let body = "";
   if (F.step === "feel") {
     body = `<div class="feel-poster">${posterHTML(f)}</div><h2>How was ${esc(f.title)}?</h2>
-      <p class="sub">${F.wasRanked ? "Re-ranking from scratch. " : ""}Go with your gut — you'll fine-tune it next.</p>
+      <p class="sub">${F.wasRanked ? "Re-ranking from scratch. " : ""}Go with your gut.</p>
       <div class="center"><div class="feels">${ORDER.map((b, i) => `<button class="feel ${b}" data-act="feel" data-b="${b}"><i>${BUCKETS[b].icon}</i>${BUCKETS[b].label}<small>${BUCKETS[b].hint}</small><kbd>${i + 1}</kbd></button>`).join("")}</div></div>
-      ${queueTotal ? `<div class="flow-foot"><button class="btn ghost sm" data-act="queue-skip">Skip this one for now</button></div>` : ""}`;
+      ${queueTotal ? `<div class="flow-foot"><button class="btn ghost sm" data-act="queue-skip">Skip for now</button></div>` : ""}`;
   } else if (F.step === "duel") {
     const mid = (F.lo + F.hi) >> 1;
     const opp = film(S.lists[F.bucket][mid]);
     const dots = Array.from({ length: F.max }, (_, i) => `<i class="${i < F.comps ? "on" : ""}"></i>`).join("");
-    body = `<h2>Which did you like more?</h2><p class="sub">Tap one, or use ← and →</p>
+    body = `<h2>Which did you like more?</h2><p class="sub keys">Or press ← →</p>
       <div class="center"><div class="duel">
         <button class="pick" id="pick-new" data-act="pick-new">${posterHTML(f, "l")}<div class="t">${esc(f.title)}</div><div class="y">${f.year}</div><span class="new">New</span></button>
         <div class="vs">VS</div>
@@ -161,7 +161,7 @@ function render() {
     const s = scoreOf(F.id);
     const beat = F.against.filter((id) => scoreOf(id).overall > s.overall).map((id) => film(id).title);
     body = `<div class="reveal">
-      <div class="big-score ${s.b}">${s.score.toFixed(1)}</div>
+      <div class="big-score ${s.b}" id="big-score">${s.score.toFixed(1)}</div>
       <h2 class="mt-0">${esc(f.title)}</h2>
       <p class="rank"><b>#${s.overall}</b> of ${rankedCount()} in your list · ${BUCKETS[s.b].short}${F.comps ? ` · ${F.comps} pick${F.comps === 1 ? "" : "s"}` : ""}</p>
       ${beat.length ? `<p class="beat">Ranked above ${beat.slice(0, 2).map(esc).join(" and ")}${beat.length > 2 ? ` and ${beat.length - 2} more` : ""}</p>` : ""}
@@ -176,22 +176,23 @@ function render() {
     const form = $("#flow #details");
     bindWhereChips(form);
     form.addEventListener("submit", (e) => e.preventDefault());
+    countUp($("#big-score"), scoreOf(F.id).score);
   }
 }
 
-function sparks() {
-  navigator.vibrate?.([12, 40, 18]);
-  if (reduceMotion()) return;
-  const colors = ["#e5484d", "#ff8589", "#f2f0ee", "#6fdcb0"];
-  for (let i = 0; i < 28; i++) {
-    const s = document.createElement("i");
-    s.className = "spark";
-    const a = (Math.PI * 2 * i) / 28;
-    const r = 130 + Math.random() * 120;
-    s.style.cssText = `background:${colors[i % 4]};--dx:${Math.cos(a) * r}px;--dy:${Math.sin(a) * r}px`;
-    $("#flow").appendChild(s);
-    setTimeout(() => s.remove(), 1100);
-  }
+// The score counts up to its value as the result appears. The final text is already in place,
+// so nothing depends on the animation finishing.
+function countUp(el, to) {
+  if (!el || reduceMotion()) return;
+  const from = Math.max(0, to - 2.5);
+  const t0 = performance.now();
+  const tick = (now) => {
+    if (!el.isConnected) return;
+    const p = Math.min(1, (now - t0) / 650);
+    el.textContent = (from + (to - from) * (1 - Math.pow(1 - p, 3))).toFixed(1);
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 export function flowAction(name, el) {
@@ -223,7 +224,7 @@ export function quickAdd() {
   const dlg = openModal(`<h2 class="dlg-title">Rank a film</h2>
     <div class="searchbar">${ICON.search}<input id="qa" type="search" aria-label="Search films to rank" placeholder="Search ${filmCount().toLocaleString()} films" autocomplete="off"></div>
     <div class="qa-results" id="qa-results"></div>
-    <a class="qa-bulk" href="#/lists/torank" data-act="modal-close-nav">${ICON.list}<span><b>Seen a lot of movies?</b><small>Type them all at once and rank them later</small></span>${ICON.chevron}</a>`, { wide: true });
+    <a class="qa-bulk" href="#/lists/torank" data-act="modal-close-nav">${ICON.list}<span><b>Paste a list</b><small>Add many films at once, rank them later</small></span>${ICON.chevron}</a>`, { wide: true });
   const input = dlg.querySelector("#qa");
   const out = dlg.querySelector("#qa-results");
   // Before typing: a fresh, personalized set every time the box opens (and on Shuffle).
@@ -231,7 +232,7 @@ export function quickAdd() {
   const draw = () => {
     const q = input.value.trim();
     const films = q ? searchFilms({ q }).slice(0, 30) : suggestions;
-    out.innerHTML = (q ? "" : `<div class="qa-head"><p class="muted qa-hint">Suggested for you · seen any?</p><button type="button" class="btn sm ghost" id="qa-shuffle">${ICON.repeat} Shuffle</button></div>`) + (films.length
+    out.innerHTML = (q ? "" : `<div class="qa-head"><p class="muted qa-hint">Suggested</p><button type="button" class="btn sm ghost" id="qa-shuffle">${ICON.repeat} Shuffle</button></div>`) + (films.length
       ? films.map((f) => {
           const s = scoreOf(f.id);
           return `<button class="qa-row" data-act="qa-pick" data-id="${f.id}">${posterHTML(f, "s")}<span><b>${esc(f.title)}</b><small>${f.year}${s ? " · in your list" : ""}</small></span>${s ? scoreHTML(s.score) : `<span class="qa-go">${ICON.rank}</span>`}</button>`;
