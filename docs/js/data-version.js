@@ -1,2 +1,2 @@
-// Written by tools/build_movie_db.py. Changes whenever the film data changes.
-export const DATA_VERSION = "e3d85a42cf55";
+// Written by the tools/ data scripts. Changes whenever the film data changes.
+export const DATA_VERSION = "9baa005989b4";

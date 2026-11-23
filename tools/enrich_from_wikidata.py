@@ -14,8 +14,9 @@ about how famous a film is. This script, run after it, edits docs/data IN PLACE:
 Film ids never change: existing films keep their position and new ones are appended, because
 members' rankings are saved by id. Run it again any time; it only adds what is missing.
 
-Usage: python3 tools/enrich_from_wikidata.py docs/data            (uses tools/wikidata_cache.json)
-       python3 tools/enrich_from_wikidata.py docs/data --refresh  (ask Wikidata again)
+Usage: python3 tools/enrich_from_wikidata.py docs/data               (uses tools/wikidata_cache.json)
+       python3 tools/enrich_from_wikidata.py docs/data --refresh     (ask Wikidata again)
+       python3 tools/enrich_from_wikidata.py docs/data --minutes=20  (how long to spend fetching posters; default 100)
 """
 import datetime
 import hashlib
@@ -44,6 +45,10 @@ def pop_for(links):
         if links >= at:
             return pop
     return 0
+
+
+# Wikidata items whose language count overstates how well known the film is (mass-created pages).
+NOT_THAT_FAMOUS = {"Bad Cat", "Charlotte's Web 2: Wilbur's Great Adventure"}
 
 
 def norm(title):
@@ -309,7 +314,7 @@ def alt_names(title, names):
     return out[:4]
 
 
-def main(out, refresh=False):
+def main(out, refresh=False, minutes=100):
     cache = {} if refresh or not os.path.exists(CACHE) else json.load(open(CACHE, encoding="utf-8"))
     index_path = os.path.join(out, "index.json")
     index = json.load(open(index_path, encoding="utf-8"))
@@ -363,23 +368,35 @@ def main(out, refresh=False):
     # 2. well-known films the database lacks
     print("Finding well-known films that are missing…", flush=True)
     cands = find_new(cache)
+    cands_titles = {c["title"] for c in cands.values()}
     have_href = {h for h in hrefs if h}
     by_year = {}
     for fid, r in enumerate(films):
         by_year.setdefault(r[1], []).append(fid)
+    pool = [(q, c) for q, c in sorted(cands.items(), key=lambda x: (-x[1]["links"], x[0]))
+            if q not in have_q and c["title"] not in have_href and 1880 <= c["year"] <= THIS_YEAR and word_key(c["label"])]
+    alt_new = cache.setdefault("alt_new", {})
+    for part in chunks([q for q, _ in pool if q not in alt_new], 150):
+        for q in part:
+            alt_new[q] = []
+        for r in sparql(f"""SELECT ?f ?alt WHERE {{ VALUES ?f {{ {' '.join('wd:' + q for q in part)} }} ?f skos:altLabel ?alt FILTER(LANG(?alt) IN ("en", "mul")) }}"""):
+            alt_new[qid(r["f"])].append(r["alt"])
+        time.sleep(0.3)
+    save(cache)
+
     new = []
-    for q, c in sorted(cands.items(), key=lambda x: (-x[1]["links"], x[0])):
-        if q in have_q or c["title"] in have_href or not (1880 <= c["year"] <= THIS_YEAR) or not word_key(c["label"]):
-            continue
+    for q, c in pool:
         near = [fid for d in (0, -1, 1) for fid in by_year.get(c["year"] + d, [])]
-        twin = next((fid for fid in near if same_name(films[fid][0], c["label"])), None)
+        # the same film may be here under its title or one of its other names ("Sorcerer's Stone" / "Philosopher's Stone")
+        names = [c["label"]] + alt_names(c["label"], alt_new.get(q, []))
+        twin = next((fid for fid in near if any(same_name(films[fid][0], n) for n in names)), None)
         if twin is None:  # an entry with no Wikidata link whose title is a wordier form of this film's name
             twin = next((fid for fid in near if fid not in matched and long_form_of(films[fid][0], c["label"])), None)
         if twin is not None:
             # Already here under a slightly different name or an old article link: improve that entry instead.
             if twin not in matched:
                 matched.add(twin)
-                apply(twin, {"q": q, "links": c["links"], "label": c["label"], "alt": []})
+                apply(twin, {"q": q, "links": c["links"], "label": c["label"], "alt": alt_new.get(q, [])})
                 load_shard(twin // shard)[twin % shard][2] = c["title"].replace(" ", "_")
                 stats["merged"] += 1
             continue
@@ -388,18 +405,10 @@ def main(out, refresh=False):
     new.sort(key=lambda x: (-x[1]["links"], x[0]))
     print(f"  {len(new)} to add", flush=True)
     det = details_for([q for q, _ in new], cache)
+    # films added on an earlier run that still have no poster
+    waiting = [hrefs[fid] for fid in range(core, len(hrefs)) if not films[fid][3] and not rest_posters[fid - core] and hrefs[fid] in cands_titles]
     desc = descriptions_for([q for q, _ in new], cache)
-    summ = summary_for([c["title"] for _, c in new], cache)
-    alt_new = cache.setdefault("alt_new", {})
-    todo = [q for q, _ in new if q not in alt_new]
-    for part in chunks(todo, 150):
-        for q in part:
-            alt_new[q] = []
-        for r in sparql(f"""SELECT ?f ?alt WHERE {{ VALUES ?f {{ {' '.join('wd:' + q for q in part)} }} ?f skos:altLabel ?alt FILTER(LANG(?alt) IN ("en", "mul")) }}"""):
-            alt_new[qid(r["f"])].append(r["alt"])
-        time.sleep(0.3)
-    save(cache)
-
+    summ = summary_for([c["title"] for _, c in new] + waiting, cache, minutes)
     added = 0
     for q, c in new:
         d, s = det.get(q, {}), summ.get(c["title"]) or {}
@@ -407,7 +416,7 @@ def main(out, refresh=False):
         if not plot and not d.get("cast"):
             continue  # nothing to show for it: skip rather than add an empty film
         g = map_genres(d.get("genres", []), index["genres"])
-        row = [c["label"], c["year"], g, poster_path(s.get("poster", "")), pop_for(c["links"])]
+        row = [c["label"], c["year"], g, poster_path(s.get("poster", "")), 20 if c["label"] in NOT_THAT_FAMOUS else pop_for(c["links"])]
         alts = alt_names(c["label"], alt_new.get(q, []))
         if alts:
             row.append(alts)
@@ -455,4 +464,5 @@ def main(out, refresh=False):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], "--refresh" in sys.argv)
+    mins = next((int(a.split("=")[1]) for a in sys.argv if a.startswith("--minutes=")), 100)
+    main(sys.argv[1], "--refresh" in sys.argv, mins)
