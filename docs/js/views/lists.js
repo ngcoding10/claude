@@ -1,5 +1,6 @@
 import { $, esc, ICON, norm, timeAgo, toast, copyText } from "../util.js";
-import { film, genres, genreNames } from "../films.js";
+import { film, genres, genreNames, namesOf } from "../films.js";
+import { wordScore } from "../fuzzy.js";
 import { BUCKETS } from "../model.js";
 import { api } from "../api/index.js";
 import { S, myRows, rankedCount, scoreOf } from "../state.js";
@@ -23,13 +24,17 @@ export function listRowsHTML(rows, { showNote = true, owner = true } = {}) {
 export function filterRows(rows, Q) {
   const g = Q.genre ? genres().indexOf(Q.genre) : -1;
   const words = norm(Q.q || "").split(" ").filter(Boolean);
+  // First the exact way; if that finds nothing, again allowing for typos ("avenjers").
+  const exactly = (f) => words.every((w) => namesOf(f).some((n) => n.includes(w)));
+  const nearly = (f) => words.every((w) => namesOf(f).some((n) => n.split(" ").some((x) => wordScore(w, x) > 0)));
+  const fits = !words.length ? () => true : rows.some((r) => exactly(film(r.film_id))) ? exactly : nearly;
   let out = rows.filter((r) => {
     const f = film(r.film_id);
     if (Q.bucket !== "all" && r.bucket !== Q.bucket) return false;
     if (g >= 0 && !f.g.includes(g)) return false;
     if (Q.decade && Math.floor(f.year / 10) * 10 !== Number(Q.decade)) return false;
     if (Q.year && new Date(r.watched_on || r.created_at).getFullYear() !== Number(Q.year)) return false;
-    if (words.length && !words.every((w) => f.n.includes(w))) return false;
+    if (!fits(f)) return false;
     return true;
   });
   const by = {

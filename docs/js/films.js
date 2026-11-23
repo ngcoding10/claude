@@ -1,5 +1,6 @@
 import { norm } from "./util.js";
 import { DATA_VERSION } from "./data-version.js";
+import { createFuzzyIndex } from "./fuzzy.js";
 
 // Versioned URLs: the browser may reuse its copy without asking the server, until the data changes.
 const dataUrl = (path) => fetch(`data/${path}?v=${DATA_VERSION}`, { cache: "force-cache" });
@@ -76,6 +77,28 @@ export function details(id) {
 
 const YEAR = /^(19|20)\d\d$/;
 
+// Typo-tolerant index over every title and other name. Built the first time a search needs it
+// (a one-off cost), never at startup.
+let fuzzy = null;
+const fuzzyIndex = () => (fuzzy ||= createFuzzyIndex(DB.films, (f) => [f.title, ...f.alt], { weight: (f) => f.pop }));
+// Below this many ordinary matches, misspelled ones are added after them.
+const FEW = 8;
+
+/**
+ * Films whose names nearly match what was typed ("avenjers", "avgenrs"), best first.
+ * Year words are left out of the comparison; films from a typed year come first.
+ */
+export function fuzzyFilms(q, { limit = 20, filter = null } = {}) {
+  const tokens = norm(q).split(" ").filter(Boolean);
+  const years = tokens.filter((t) => YEAR.test(t)).map(Number);
+  const text = tokens.filter((t) => !YEAR.test(t)).join(" ");
+  if (!text) return [];
+  const hits = fuzzyIndex().search(text, { limit: years.length ? limit * 3 : limit, filter });
+  const films = hits.map((h) => h.item);
+  if (years.length) films.sort((a, b) => years.includes(b.year) - years.includes(a.year));
+  return films.slice(0, limit);
+}
+
 export function searchFilms({ q = "", genre = "", decade = "", sort = "pop", exclude = null } = {}) {
   const tokens = norm(q).split(" ").filter(Boolean);
   const years = tokens.filter((t) => YEAR.test(t)).map(Number);
@@ -111,7 +134,15 @@ export function searchFilms({ q = "", genre = "", decade = "", sort = "pop", exc
     old: (a, b) => b[0] - a[0] || a[1].year - b[1].year || b[1].pop - a[1].pop || a[1].id - b[1].id,
     az: (a, b) => a[1].n.localeCompare(b[1].n),
   };
-  return out.sort(sorters[sort] || sorters.pop).map((x) => x[1]);
+  const found = out.sort(sorters[sort] || sorters.pop).map((x) => x[1]);
+  if (!words.length || found.length >= FEW) return found;
+  // Few or no matches: the title is probably misspelled. Near matches follow the ordinary ones.
+  const have = new Set(found.map((f) => f.id));
+  const near = fuzzyFilms(q, {
+    limit: 30,
+    filter: (f) => !have.has(f.id) && !(exclude && exclude.has(f.id)) && (g < 0 || f.g.includes(g)) && (dec === null || (f.year >= dec && f.year < dec + 10)),
+  });
+  return found.concat(near);
 }
 
 export function topByGenre(name, limit = 20, exclude = null) {

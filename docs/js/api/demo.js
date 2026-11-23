@@ -3,6 +3,7 @@
 import { allFilms, genres } from "../films.js";
 import { scoreFor, ORDER } from "../model.js";
 import { rng } from "../util.js";
+import { rankPeople } from "../people-match.js";
 
 const KEY = "movi.demo.world.v1";
 const SESSION = "movi.demo.session";
@@ -240,8 +241,11 @@ export async function createDemoApi() {
     async searchUsers(q, limit = 20) {
       const s = q.trim().replace(/^@+/, "").toLowerCase();
       if (!s) return [];
-      // Prefix match, like the live backend.
-      return clone(Object.values(w.users).map((u) => u.profile).filter((p) => p.username.startsWith(s) || p.display_name.toLowerCase().startsWith(s)).sort((a, b) => b.ranked_count - a.ranked_count).slice(0, limit));
+      // Names that start with what was typed come first; then near matches, so a typo still finds people.
+      const all = Object.values(w.users).map((u) => u.profile);
+      const starts = all.filter((p) => p.username.startsWith(s) || p.display_name.toLowerCase().startsWith(s)).sort((a, b) => b.ranked_count - a.ranked_count);
+      const near = rankPeople(s, all.filter((p) => !starts.includes(p)), limit);
+      return clone([...starts, ...near].slice(0, limit));
     },
     async listProfiles({ ids = null, limit = 50 } = {}) {
       let ps = Object.values(w.users).map((u) => u.profile);

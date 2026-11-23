@@ -168,6 +168,49 @@ const log = (...a) => console.log(...a);
     await page.fill('#q', 'kenji');
     await page.waitForSelector('#results .urow');
   });
+  await step('search forgives typos: Discover search, quick add, own list, people, To rank', async () => {
+    const titles = (sel) => page.$$eval(sel, e => e.map(x => x.textContent));
+    await page.goto(BASE + '#/search?tab=films');
+    await page.waitForSelector('#q');
+    for (const [typed, want] of [['avenjers', 'Avengers'], ['avgenrs', 'Avengers'], ['madagascr', 'Madagascar'], ['avenjers 2012', 'The Avengers']]) {
+      await page.fill('#q', typed);
+      await page.waitForFunction((w) => [...document.querySelectorAll('#results .card .t')].some(t => t.textContent.includes(w)), want, { timeout: 5000 })
+        .catch(async () => { throw new Error(`Discover search "${typed}" offered: ${(await titles('#results .card .t')).slice(0, 4).join(' | ') || 'nothing'}`); });
+    }
+    if (!(await titles('#results .card .t'))[0].includes('The Avengers')) throw new Error('"avenjers 2012" should put The Avengers (2012) first');
+    if (await page.$('#results .didyoumean, #results .banner')) throw new Error('no banners expected');
+    await page.click('[data-act="quick-add"]');
+    await page.waitForSelector('#qa');
+    for (const typed of ['avenjers', 'avgenrs']) {
+      await page.fill('#qa', typed);
+      await page.waitForFunction(() => [...document.querySelectorAll('.qa-row b')].some(t => t.textContent.includes('Avengers')), null, { timeout: 5000 })
+        .catch(async () => { throw new Error(`quick add "${typed}" offered: ${(await titles('.qa-row b')).slice(0, 4).join(' | ') || 'nothing'}`); });
+    }
+    await page.keyboard.press('Escape');
+    // own list: "pulp fictoin" still finds Pulp Fiction (ranked earlier in this test)
+    await page.goto(BASE + '#/lists/been');
+    await page.waitForSelector('.rowi');
+    await page.click('[data-ctl="bucket"] [data-v="all"]');
+    await page.fill('[data-ctl="q"]', 'pulp fictoin');
+    await page.waitForFunction(() => { const r = [...document.querySelectorAll('#rows .rowi .t')]; return r.length === 1 && r[0].textContent.includes('Pulp Fiction'); }, null, { timeout: 5000 });
+    await page.fill('[data-ctl="q"]', '');
+    // people
+    await page.goto(BASE + '#/search?tab=people');
+    for (const typed of ['kenij', 'kenjii', 'mya']) {
+      await page.fill('#q', typed);
+      const want = typed === 'mya' ? null : '@kenji.screens';
+      if (want) await page.waitForFunction((w) => document.querySelector('#results')?.textContent.includes(w), want, { timeout: 5000 }).catch(() => { throw new Error(`people search "${typed}" did not find ${want}`); });
+    }
+    // To rank: a pasted list with misspellings
+    await page.goto(BASE + '#/lists/torank');
+    await page.waitForSelector('#bulk-text');
+    await page.fill('#bulk-text', 'avenjers, intersteller\nshawshenk redemtion\nmadagascr 2\nthe dark knigt');
+    await page.click('[data-act="bulk-match"]');
+    await page.waitForSelector('.match-row');
+    const got = (await titles('.match-row .minfo b')).join(' | ');
+    for (const want of ['The Avengers', 'Interstellar', 'The Shawshank Redemption', 'Madagascar: Escape 2 Africa', 'The Dark Knight']) if (!got.includes(want)) throw new Error(`To rank: missing ${want} in: ${got}`);
+    await page.click('[data-act="bulk-clear"]');
+  });
   await step('settings save', async () => {
     await page.goto(BASE + '#/settings');
     if (await page.$('[name=is_private]')) throw new Error('private account switch still shown');

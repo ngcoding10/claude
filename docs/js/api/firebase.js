@@ -4,6 +4,7 @@
 // the views expect, so nothing outside this file knows which backend is in use.
 import { createCore, loadSdkFromCdn } from "../core.js";
 import { scoreFor, ORDER } from "../model.js";
+import { rankPeople } from "../people-match.js";
 
 const IN_MAX = 30; // Firestore allows at most 30 values in an "in" filter
 const PROFILE_TTL = 60000;
@@ -313,7 +314,12 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
       }
       return profileOf(uid, true);
     },
-    /** Prefix match on username or display name (Firestore has no "contains"). */
+    /**
+     * Firestore can only match the start of a username or display name. So: first what was typed;
+     * if that finds no one, everyone whose name starts with its first 3 letters (then 2), ranked
+     * here by how close they are, so "nicoo" or "ncio" still finds nico. A typo in the first two
+     * letters cannot be found this way.
+     */
     async searchUsers(q, limit = 20) {
       const s = String(q || "").trim().replace(/^@+/, "").toLowerCase();
       if (!s || !me()) return [];
@@ -322,7 +328,18 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
         const [a, b] = await Promise.all([prefix("username"), prefix("nameLower")]);
         const out = new Map();
         for (const d of [...a.docs, ...b.docs]) out.set(d.id, remember(toProfile(d.id, data(d))));
-        return [...out.values()].sort((x, y) => y.ranked_count - x.ranked_count).slice(0, limit);
+        if (out.size) return [...out.values()].sort((x, y) => y.ranked_count - x.ranked_count).slice(0, limit);
+        for (const len of [3, 2]) {
+          if (s.length <= len) break;
+          const head = s.slice(0, len);
+          const wide = (field) => F.getDocs(F.query(col("movi_profiles"), F.where(field, ">=", head), F.where(field, "<", head + "\uf8ff"), F.limit(60)));
+          const [u, n] = await Promise.all([wide("username"), wide("nameLower")]);
+          const pool = new Map();
+          for (const d of [...u.docs, ...n.docs]) pool.set(d.id, remember(toProfile(d.id, data(d))));
+          const near = rankPeople(s, [...pool.values()], limit);
+          if (near.length) return near;
+        }
+        return [];
       });
     },
     async listProfiles({ ids = null, limit = 50 } = {}) {

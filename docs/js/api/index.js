@@ -6,7 +6,7 @@
 //             supportsGoogle, userMeta, signOut, resetPassword, canChangePassword, updatePassword,
 //             usernameAvailable (true / false / null = can't tell right now), deleteAccount,
 //             joinInfo + join (live only: someone signed in who is not a Movi member yet; see views/account.js)
-//   profiles: getProfile, getProfileByUsername, updateProfile, searchUsers (prefix match), listProfiles, placeOf
+//   profiles: getProfile, getProfileByUsername, updateProfile, searchUsers (start of a name, then near matches), listProfiles, placeOf
 //   rankings: getRankings, rankingsOfUsers, rankingsForFilm, saveLists, updateEntry
 //   watch:    getWatchlist, addWatch, removeWatch
 //   social:   follow (always immediate), unfollow, removeFollower, getFollows

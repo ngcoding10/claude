@@ -2,7 +2,8 @@
 // A local matcher always runs; in live mode the moviMatchFilms Cloud Function asks Claude to resolve
 // nicknames, numbering and franchises, and its answers are mapped back onto the local database.
 // If the function is unavailable (or the daily limit is reached) the local answers are used as they are.
-import { allFilms, namesOf } from "./films.js";
+import { allFilms, namesOf, fuzzyFilms } from "./films.js";
+import { foldText, wordScore } from "./fuzzy.js";
 import { api } from "./api/index.js";
 import { norm } from "./util.js";
 
@@ -112,6 +113,27 @@ function localMatch(raw) {
     if (best !== null) cands.push([best, f]);
   }
   cands.sort((a, b) => b[0] - a[0]);
+  // Nothing, or nothing convincing: the line is probably misspelled ("avenjers", "shawshenk redemtion").
+  // Near matches join the candidates and go through the same number / year scoring.
+  const guesses = []; // too far off to offer, but still useful to the AI as hints
+  if (!cands.length || cands[0][0] < 40) {
+    const have = new Set(cands.map((c) => c[1].id));
+    const typed = foldText(q.base).split(" ").filter(Boolean);
+    for (const f of fuzzyFilms(q.base, { limit: 12, filter: (x) => !have.has(x.id) })) {
+      // how closely the typed words match this film's best name, 0–1
+      let close = 0;
+      for (const n of namesOf(f)) {
+        const ws = n.split(" ");
+        ws.push(n.replace(/ /g, ""));
+        const s = typed.reduce((t, w) => t + Math.max(...ws.map((x) => wordScore(w, x))), 0) / typed.length;
+        if (s > close) close = s;
+      }
+      // Half the typed words wrong is a different film, not a typo ("not a real movie qqq").
+      if (close >= 0.5) cands.push([scoreFilm(f, q, words) + close * 70, f]);
+      else guesses.push(f);
+    }
+    cands.sort((a, b) => b[0] - a[0]);
+  }
   const top = cands.slice(0, 8).map((c) => c[1]);
   let best = cands.length && (cands[0][0] >= 40 || cands.length === 1) ? cands[0][1] : null;
   let series = [];
@@ -125,7 +147,7 @@ function localMatch(raw) {
       series = ordered.filter((f) => f.id !== best.id);
     }
   }
-  return { text: raw, film: best?.id ?? null, alts: top.filter((f) => f.id !== best?.id).slice(0, 6).map((f) => f.id), series: series.slice(0, 11).map((f) => f.id), hints: top };
+  return { text: raw, film: best?.id ?? null, alts: top.filter((f) => f.id !== best?.id).slice(0, 6).map((f) => f.id), series: series.slice(0, 11).map((f) => f.id), hints: top.concat(guesses).slice(0, 8) };
 }
 
 function lookup(title, year) {
