@@ -4,7 +4,8 @@
 // Contract shared by api/demo.js and api/firebase.js (all methods async unless noted):
 //   auth:     uid, mode, membersOnly, signUp, signIn, signInWithGoogle (NOT async: call it straight from the click),
 //             supportsGoogle, userMeta, signOut, resetPassword, canChangePassword, updatePassword,
-//             usernameAvailable (true / false / null = can't tell yet), deleteAccount
+//             usernameAvailable (true / false / null = can't tell right now), deleteAccount,
+//             joinInfo + join (live only: someone signed in who is not a Movi member yet; see views/account.js)
 //   profiles: getProfile, getProfileByUsername, updateProfile, searchUsers (prefix match), listProfiles, placeOf
 //   rankings: getRankings, rankingsOfUsers, rankingsForFilm, saveLists, updateEntry
 //   watch:    getWatchlist, addWatch, removeWatch

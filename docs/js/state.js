@@ -7,6 +7,8 @@ const blankLists = () => ({ loved: [], fine: [], disliked: [] });
 
 export const S = {
   me: null,
+  // Signed in, but not a Movi member yet (see renderJoin in views/account.js). Nothing else loads until they join.
+  join: null,
   lists: blankLists(),
   entries: new Map(),
   watch: [],
@@ -26,9 +28,13 @@ export async function loadSession() {
   const uid = api.uid;
   const [me, rows, watch, follows] = await Promise.all([api.getProfile(uid), api.getRankings(uid), api.getWatchlist(uid), api.getFollows(uid)]);
   if (!me) {
+    clearSession();
+    // Live mode: signing in never makes a Movi profile by itself; they are asked first.
+    if (api.joinInfo) { S.join = await api.joinInfo(); return null; }
     await api.signOut();
-    return clearSession();
+    return null;
   }
+  S.join = null;
   S.me = me;
   S.lists = listsFromRows(rows);
   S.entries = new Map(rows.map((r) => [r.film_id, r]));
@@ -44,11 +50,22 @@ export async function loadSession() {
 }
 
 export function clearSession() {
-  Object.assign(S, { me: null, lists: blankLists(), entries: new Map(), watch: [], backlog: [], following: new Set(), followers: [], friendRows: null, matches: new Map(), unread: 0, skip: new Set() });
+  Object.assign(S, { me: null, join: null, lists: blankLists(), entries: new Map(), watch: [], backlog: [], following: new Set(), followers: [], friendRows: null, matches: new Map(), unread: 0, skip: new Set() });
   return null;
 }
 
 export const signedIn = () => !!S.me;
+
+// Where to take someone after they sign in, when a link sent them to the sign-in page.
+const RETURN_KEY = "movi.returnTo";
+export function rememberReturn(hash) { try { sessionStorage.setItem(RETURN_KEY, hash); } catch {} }
+export function takeReturn() {
+  try {
+    const h = sessionStorage.getItem(RETURN_KEY);
+    sessionStorage.removeItem(RETURN_KEY);
+    return h && h.startsWith("#/") ? h : null;
+  } catch { return null; }
+}
 export const rankedIds = () => ORDER.flatMap((b) => S.lists[b]);
 export const rankedCount = () => rankedIds().length;
 export const myRows = () => rowsWithScores([...S.entries.values()].filter((r) => findBucket(r.film_id)).map((r) => ({ ...r, ...placement(r.film_id) })));

@@ -12,7 +12,7 @@ const PQ = { bucket: "all", genre: "", decade: "", sort: "rank", q: "", year: ""
 export async function renderProfile(view, username, tab = "rankings") {
   view.innerHTML = spinnerHTML();
   if (!S.me && api.membersOnly) {
-    view.innerHTML = emptyHTML({ title: "Sign in to see this profile", text: "Members' profiles and rankings are visible to signed-in members.", action: `<a class="btn primary" href="#/welcome">Join Movi</a>` });
+    view.innerHTML = emptyHTML({ title: "Sign in to see this on Movi", text: `@${esc(username)}'s profile and rankings are visible to signed-in members. Sign in or create an account and you'll come straight back here.`, action: `<a class="btn primary" href="#/welcome">Sign in or join Movi</a>` });
     return;
   }
   const p = await api.getProfileByUsername(username);

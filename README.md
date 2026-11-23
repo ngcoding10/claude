@@ -74,7 +74,7 @@ Both are safe to publish: the security rules protect the data, not these values.
 
 How live mode behaves:
 
-- **One account across the owner's apps.** Sign-in and username are shared; signing in to Movi with an account from another app keeps the username. "Delete my Movi data" removes only Movi's data, and the sign-in itself only if no other app is in use.
+- **One account across the owner's apps, but joining is a choice.** Sign-in and username are shared. Someone signed in through another app is not a Movi member until they press **Join Movi** on the join screen (which keeps their username); nothing is created before that. "Delete my Movi data" removes only Movi's data, and the sign-in itself only if no other app is in use; otherwise they stay signed in and see the join screen again.
 - **Every account is visible to signed-in members.** There are no private accounts or follow requests; guests can browse films but not profiles.
 - **Scores are never stored.** A person's whole ranking is one document of film ids, best first; scores come from position (`scoreFor` in `js/model.js`, the same formula the backend uses).
 - **Site-wide averages and "Top rated on Movi" are rebuilt hourly**, so they can be up to an hour behind.

@@ -1,7 +1,7 @@
 import { $, esc, ICON, toast } from "./util.js";
 import { loadFilms, film, isFilmId } from "./films.js";
 import { initApi, api } from "./api/index.js";
-import { S, rankedIds, removeBacklog, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
+import { S, rankedIds, removeBacklog, rememberReturn, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
 import { fillMissingPosters, avatarHTML, closeModal, modalOpen, confirmDialog, spinnerHTML, emptyHTML, withTransition } from "./ui.js";
 import { openFilm, closeFilm, refreshFilm, refreshFilmPoster, recommendDialog, shareFilm, sheetFilmId } from "./film-sheet.js";
 import { startRank, startQueue, cancelRank, flowActive, flowAction, flowKey, quickAdd, quickPick, requireMe, setFlowDoneHandler } from "./rank-flow.js";
@@ -11,7 +11,7 @@ import { renderDiscover, renderSearch, drawResults, moreResults, refreshQuick, s
 import { renderLists, shareList } from "./views/lists.js";
 import { renderProfile, showFollows, shareProfile } from "./views/profile.js";
 import { renderLeaderboard, renderNotifications, renderPeople, renderTogether } from "./views/social.js";
-import { signInWithGoogle, shuffleOnboarding, renderWelcome, renderOnboarding, onboardingNext, onboardingDone, renderSettings, exportData, deleteAccount, forgotPassword, needsOnboarding } from "./views/account.js";
+import { signInWithGoogle, shuffleOnboarding, renderWelcome, renderJoin, renderOnboarding, onboardingNext, onboardingDone, renderSettings, exportData, deleteAccount, forgotPassword, needsOnboarding } from "./views/account.js";
 
 const view = () => $("#view");
 
@@ -28,6 +28,7 @@ const ROUTES = {
   settings: { auth: true, nav: "profile", render: (v) => renderSettings(v) },
   onboarding: { auth: true, nav: "", render: (v) => renderOnboarding(v) },
   welcome: { guest: true, nav: "", render: (v) => renderWelcome(v) },
+  join: { nav: "", render: (v) => renderJoin(v) },
   u: { nav: "profile", render: (v, a) => renderProfile(v, decodeURIComponent(a[0] || ""), a[1]) },
 };
 
@@ -41,6 +42,12 @@ function parse() {
 let current = null;
 async function route() {
   let { name, args, params } = parse();
+  // Signed in but not a Movi member yet: the join screen, whatever the address.
+  if (S.join && !S.me) {
+    current = { name: "join", args: [], params };
+    return draw(current);
+  }
+  if (name === "join") name = "";
   if (name === "film") {
     const id = Number(args[0]);
     if (!current) {
@@ -52,6 +59,8 @@ async function route() {
   }
   if (!ROUTES[name]) name = signedIn() ? "feed" : "welcome";
   const r = ROUTES[name];
+  // A link that needs an account (a shared profile, an invite) is remembered, so signing in lands on it.
+  if (!signedIn() && api.membersOnly && name === "u" && args[0]) rememberReturn(location.hash);
   if (r.auth && !signedIn()) return go("#/welcome");
   if (r.guest && signedIn()) return go("#/feed");
   if (name === "u" && !args[0] && signedIn()) args = [S.me.username];
@@ -128,7 +137,13 @@ function goBack() {
 function renderShell(active) {
   const me = S.me;
   const back = $("#backbtn");
-  if (back) back.hidden = !isSubPage();
+  if (back) back.hidden = !isSubPage() || !!S.join;
+  if (S.join && !me) {
+    // Nothing but the join screen until they decide.
+    $("#topnav").innerHTML = $("#topright").innerHTML = $("#tabbar").innerHTML = "";
+    document.body.classList.add("guest");
+    return;
+  }
   const tab = (key, href, icon, label) => `<a href="${href}" class="${active === key ? "active" : ""}" data-nav="${key}" ${active === key ? 'aria-current="page"' : ""}>${icon}<span>${label}</span></a>`;
   const bell = `<a class="iconbtn bell ${active === "notifications" ? "active" : ""}" href="#/notifications" aria-label="Notifications">${ICON.bell}${S.unread ? `<b>${S.unread > 9 ? "9+" : S.unread}</b>` : ""}</a>`;
   $("#topnav").innerHTML = me
@@ -152,6 +167,7 @@ document.addEventListener("movi:posters", () => { fillMissingPosters(); refreshF
 document.addEventListener("movi:unread", () => current && renderShell(ROUTES[current.name]?.nav));
 document.addEventListener("movi:auth", () => current && renderShell(ROUTES[current.name]?.nav));
 document.addEventListener("movi:signedout", () => { clearSession(); go("#/welcome"); });
+document.addEventListener("movi:reroute", () => route());
 
 // ---------------- Refresh after changes ----------------
 // Removed items shrink away while their neighbors slide into the gap.

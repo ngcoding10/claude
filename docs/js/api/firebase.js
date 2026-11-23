@@ -34,8 +34,6 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
     if (code === "unavailable") return new Error("You seem to be offline");
     return e instanceof Error ? e : new Error(String(e));
   };
-  // Messages from Cloud Functions can arrive with the HTTP status tacked on ("... [429]").
-  const plain = (msg) => String(msg || "Something went wrong. Try again.").replace(/\s*\[\d{3}\]\s*$/, "");
   const run = async (fn) => { try { return await fn(); } catch (e) { throw friendly(e); } };
   // Deleting a document that is already gone is refused by the rules; treat that as done.
   const remove = async (r) => {
@@ -78,11 +76,13 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
   };
 
   /**
-   * Makes sure the signed-in person has a Movi profile. Someone who already has a username from
-   * another of the owner's apps keeps it; otherwise one is claimed (the name they typed, or one
-   * suggested from their Google name). Account, username and profile are written all-or-nothing.
+   * Creates the signed-in person's Movi profile. Only ever called because they asked to join:
+   * Movi's own sign-up form, or the "Join Movi" button. Signing in alone never creates one, so
+   * using another of the owner's apps does not make someone a Movi member.
+   * Someone who already has a username from another app keeps it; otherwise the name they chose
+   * is claimed. Account, username and profile are written all-or-nothing.
    */
-  async function ensureProfile({ username = null, displayName = null } = {}) {
+  async function createProfile({ username = null, displayName = null } = {}) {
     const uid = me();
     if (!uid) return null;
     const existing = await profileOf(uid, true);
@@ -105,7 +105,7 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
       const typed = username ? core.account.normalize(username) : null;
       if (typed && core.account.valid(typed) && (await core.account.isFree(typed))) await claim(typed);
       else if (typed) { const e = new Error(`@${typed} is taken, so try another`); e.code = "username-taken"; throw e; }
-      else await claim(await core.account.suggest(core.user.name || core.user.email || "movi"));
+      else throw new Error("Pick a username first");
     }
     return profileOf(uid, true);
   }
@@ -199,8 +199,6 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
   };
   let topCache = null;
 
-  const afterSignIn = async (opts) => { forget(); return ensureProfile(opts); };
-  if (core.user) await ensureProfile().catch((e) => console.warn("Movi profile:", e?.message));
 
   const api = {
     mode: "firebase",
@@ -220,16 +218,20 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
     signInWithGoogle() {
       return core.signInWithGoogle().then(async (user) => {
         if (!user) return null;
-        await afterSignIn();
+        forget();
         return user;
       });
     },
     async signUp({ email, password, username, displayName }) {
+      // Check the name before any sign-in exists...
+      if ((await api.usernameAvailable(username)) === false) { const e = new Error(`@${core.account.normalize(username)} is taken, so try another`); e.code = "username-taken"; throw e; }
       await core.signUpWithEmail(email.trim(), password, displayName);
+      forget();
       try {
-        await afterSignIn({ username, displayName });
+        // Signing up on Movi's own form is choosing to join, so the profile is made straight away.
+        await createProfile({ username, displayName });
       } catch (e) {
-        // The sign-in exists but the username could not be claimed: undo, so they can try again.
+        // ...and if someone else took it in that instant, undo the sign-in so they can try again.
         await core.A.deleteUser(core.auth.currentUser).catch(() => core.signOut().catch(() => {}));
         throw e.code === "username-taken" ? e : friendly(e);
       }
@@ -237,7 +239,25 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
     },
     async signIn({ email, password }) {
       await core.signInWithEmail(email.trim(), password);
-      await run(() => afterSignIn());
+      forget();
+    },
+    /**
+     * For someone who is signed in but is not a Movi member yet (they use another of the owner's
+     * apps, or just signed in with Google for the first time): what the join screen needs.
+     * `username` is their existing account username (kept as it is), or null with a `suggested` one.
+     */
+    async joinInfo() {
+      const uid = me();
+      if (!uid) return null;
+      const account = await run(() => core.account.get(uid));
+      const displayName = String(account?.displayName || core.user.name || "").trim().slice(0, 40);
+      if (account?.username) return { username: account.username, suggested: null, displayName, email: core.user.email };
+      return { username: null, suggested: await core.account.suggest(core.user.name || core.user.email || "movi").catch(() => ""), displayName, email: core.user.email };
+    },
+    /** The "Join Movi" button: creates the profile. */
+    async join({ username = null, displayName = null } = {}) {
+      requireUser();
+      try { return await createProfile({ username, displayName }); } catch (e) { throw e.code === "username-taken" ? e : friendly(e); }
     },
     async userMeta() { const u = core.user; return u ? { name: u.name, email: u.email, providers: u.providers } : null; },
     async signOut() { await core.signOut(); forget(); },
@@ -245,19 +265,22 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
     async resetPassword(email) { await core.resetPassword(email.trim()); },
     get canChangePassword() { return !!core.user?.providers.includes("password"); },
     async updatePassword(password) { await core.updatePassword(password); },
-    /** true / false, or null when it can't be checked (usernames are readable only once signed in). */
+    /** true / false, or null when it can't be checked right now (offline). Works before signing in. */
     async usernameAvailable(name) {
       const n = core.account.normalize(name);
       if (!core.account.valid(n)) return false;
-      if (!me()) return null;
       try { return await core.account.isFree(n); } catch { return null; }
     },
-    /** Deletes this person's Movi data (and the sign-in itself if they use none of the other apps). */
+    /**
+     * Deletes this person's Movi data. The sign-in itself goes too (and core signs them out) only
+     * when they use none of the owner's other apps; otherwise they stay signed in, with no Movi
+     * profile, and see the join screen. Nothing is recreated unless they press "Join Movi".
+     */
     async deleteAccount() {
       requireUser();
-      try { await core.deleteMyData("movi"); } catch (e) { throw new Error(plain(e.message)); }
-      await core.signOut().catch(() => {});
+      const res = await core.deleteMyData("movi");
       forget();
+      return res;
     },
 
     // ───────── profiles ─────────
@@ -604,7 +627,7 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
         const res = await core.call("moviMatchFilms", { lines });
         return Array.isArray(res?.results) ? res.results : null;
       } catch (e) {
-        if (e.code === "resource-exhausted") api.matchError = plain(e.message);
+        if (e.code === "resource-exhausted") api.matchError = e.message;
         return null;
       }
     },
@@ -614,7 +637,7 @@ export async function createFirebaseApi({ config = null, appCheckSiteKey = null,
   if (emulator && typeof window !== "undefined") {
     window.__emuSignIn = async (email, name) => {
       const user = await core.emulatorSignIn(email, name);
-      await afterSignIn();
+      forget();
       return user;
     };
   }

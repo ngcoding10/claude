@@ -1,6 +1,7 @@
 // End-to-end test of Movi's live mode against the Firebase emulators, through the real UI.
-// Two people: Alice signs up with email + password, Bob signs in "with Google" (the Auth
-// emulator's made-up Google account, via window.__emuSignIn, which only exists in emulator mode).
+// Alice signs up with email + password; Bob and Cara sign in "with Google" (the Auth emulator's
+// made-up Google account, via window.__emuSignIn, which only exists in emulator mode) and go
+// through the "Join Movi" screen. Cara also "uses another app", so deleting her Movi data keeps her sign-in.
 //
 // Run: 1. in the backend repo (github.com/ngcoding10/backend-combination): start the emulators
 //         (Auth 9099, Firestore 8080, Functions 5001, project demo-apps)
@@ -75,9 +76,12 @@ const beenList = async (page) => {
 (async () => {
   const proxy = process.env.HTTPS_PROXY && !process.env.MOVI_SDK_DIR ? { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' } : undefined;
   const browser = await chromium.launch({ proxy });
-  const A = await newUser(browser, 'alice'), B = await newUser(browser, 'bob');
-  const ua = `alice.${T}`, ua2 = `alice_2.${T}`, mailA = `alice.${T}@test.dev`, mailB = `bob.${T}@test.dev`;
-  let ub = null, aFilms = [];
+  const A = await newUser(browser, 'alice'), B = await newUser(browser, 'bob'), C = await newUser(browser, 'cara');
+  const ua = `alice.${T}`, ua2 = `alice_2.${T}`, mailA = `alice.${T}@test.dev`, mailB = `bob.${T}@test.dev`, mailC = `cara.${T}@test.dev`;
+  const ub = `bobby.${T}`;
+  let uc = null, aFilms = [];
+  const TOP_FILM = 30000; // obscure enough not to appear in any other Discover row
+  const apiCall = (page, body) => page.evaluate(`(async () => { const api = (await import('./js/api/index.js')).api; ${body} })()`);
 
   // ───────── Alice: email sign-up ─────────
   await step('live mode: no demo note, Google button shown', A, async () => {
@@ -208,17 +212,49 @@ const beenList = async (page) => {
   await A.screenshot({ path: `${SH}/a-torank.png` });
 
   // ───────── Bob: Google-style sign-in ─────────
-  await step('bob signs in with Google (emulator): gets a suggested username and a profile', B, async () => {
-    await B.goto(EMU);
-    await B.waitForSelector('.welcome', { timeout: 30000 });
+  await step('guest opening a shared profile link sees a clean sign-in screen', B, async () => {
+    await B.goto(EMU + `#/u/${ua}`);
+    await B.waitForSelector('.empty h3', { timeout: 30000 });
+    expect((await B.textContent('.empty h3')).includes('Sign in to see this on Movi'), 'guest screen: ' + await B.textContent('.empty h3'));
+    await B.click('.empty a.btn');
+    await B.waitForSelector('.welcome');
+  });
+  await step('sign-up form says taken / available before any account exists; a taken name creates no sign-in', B, async () => {
+    await B.fill('[name=display_name]', 'Bob Tester');
+    await B.fill('[name=username]', ua);
+    await until(async () => (await B.textContent('#u-hint')).includes('is taken'), 'hint to say taken');
+    await B.fill('[name=email]', `nobody.${T}@test.dev`);
+    await B.fill('[name=password]', 'secret123');
+    await B.click('#auth-go');
+    await until(async () => /taken/.test(await B.textContent('#auth-err')), 'taken error');
+    expect((await apiCall(B, 'return api.uid')) === null, 'a sign-in was created for a taken username');
+    await B.fill('[name=username]', ub);
+    await until(async () => (await B.textContent('#u-hint')).includes('is available'), 'hint to say available');
+  });
+  await step('bob signs in with Google (emulator): join screen, nothing created until he joins', B, async () => {
     await B.evaluate(([email]) => window.__emuSignIn(email, 'Bob Tester'), [mailB]);
     await B.reload();
-    await B.waitForSelector('.ob h1', { timeout: 20000 });
+    await B.waitForSelector('#join-form', { timeout: 20000 });
+    expect(/^bob\.tester\d*$/.test(await B.inputValue('#join-form [name=username]')), 'suggested username was ' + await B.inputValue('#join-form [name=username]'));
+    expect((await B.inputValue('#join-form [name=display_name]')) === 'Bob Tester', 'display name not taken from Google');
+    expect((await B.textContent('#join-form')).includes('visible to other signed-in members'), 'visibility line missing');
+    expect(!(await B.$('#topnav a')) && !(await B.$('.post')), 'something besides the join screen is shown');
+    await go(B, '#/feed');
+    await B.waitForSelector('#join-form');
+    expect((await apiCall(A, `return (await api.searchUsers('bob.tester')).length`)) === 0, 'a profile exists before joining');
+    expect((await apiCall(B, `return await api.getProfile(api.uid)`)) === null, 'a profile exists before joining');
+    // a taken name is refused here too
+    await B.fill('#join-form [name=username]', ua);
+    await until(async () => (await B.textContent('#u-hint')).includes('is taken'), 'join hint to say taken');
+    await B.fill('#join-form [name=username]', ub);
+    await until(async () => (await B.textContent('#u-hint')).includes('is available'), 'join hint to say available');
+    await B.click('#join-go');
+    // ...and he lands on the profile link he first opened as a guest
+    await B.waitForSelector('.phead', { timeout: 20000 });
+    expect((await B.textContent('.phead')).includes('@' + ua) && B.url().includes(`#/u/${ua}`), 'did not return to the shared link: ' + B.url());
     await go(B, '#/settings');
     await B.waitForSelector('#prof-form');
-    ub = await B.inputValue('#prof-form [name=username]');
-    expect(/^bob\.tester\d*$/.test(ub), 'suggested username was ' + ub);
-    expect((await B.inputValue('#prof-form [name=display_name]')) === 'Bob Tester', 'display name not taken from Google');
+    expect((await B.inputValue('#prof-form [name=username]')) === ub, 'username is ' + await B.inputValue('#prof-form [name=username]'));
     expect(!(await B.$('#pw-form')), 'password form offered to a Google-only account');
   });
   await step('bob ranks a film alice ranked', B, async () => {
@@ -269,6 +305,37 @@ const beenList = async (page) => {
     expect((await who.locator('.score').textContent()) === aFilms[0].score, `alice's score on the film page is ${await who.locator('.score').textContent()}, her list says ${aFilms[0].score}`);
     await B.screenshot({ path: `${SH}/b-sheet.png` });
     await B.keyboard.press('Escape');
+  });
+  await step('cara joins; "Top rated on Movi" shows a film two members ranked, after the hourly stats run', C, async () => {
+    await C.goto(EMU);
+    await C.waitForSelector('.welcome', { timeout: 30000 });
+    await C.evaluate(([email]) => window.__emuSignIn(email, 'Cara Tester'), [mailC]);
+    await C.reload();
+    await C.waitForSelector('#join-form', { timeout: 20000 });
+    uc = await C.inputValue('#join-form [name=username]');
+    await C.click('#join-go');
+    await C.waitForSelector('.ob h1', { timeout: 20000 });
+    for (const P of [B, C]) {
+      await go(P, `#/film/${TOP_FILM}`);
+      await P.waitForSelector('.panel [data-act="rank"]');
+      await P.click('.panel [data-act="rank"]');
+      await rankOpenFlow(P, 'loved', null);
+      await P.keyboard.press('Escape');
+    }
+    // The scheduled function does not run by itself in the emulator: trigger it the way the emulator allows.
+    const res = await fetch('http://127.0.0.1:5001/demo-apps/us-central1/moviRebuildStats-0', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expect(res.ok, 'stats rebuild trigger answered ' + res.status);
+    await until(async () => {
+      await go(A, '#/discover');
+      await A.reload();
+      await A.waitForSelector('#quick .card');
+      return A.waitForSelector(`#top-movi [data-film="${TOP_FILM}"]`, { timeout: 5000 }).then(() => true, () => false);
+    }, 'the film in Top rated on Movi', 40000);
+    expect(/avg · 2 members/.test(await A.textContent('#top-movi')), 'label: ' + (await A.textContent('#top-movi')).replace(/\s+/g, ' ').slice(0, 200));
+    await A.click(`#top-movi [data-film="${TOP_FILM}"]`);
+    await A.waitForSelector('.panel .statline b');
+    expect(/average from 2 members/.test(await A.textContent('.panel .statline')), 'film page average: ' + await A.textContent('.panel .statline'));
+    await A.keyboard.press('Escape');
   });
   await step('bob recommends a film to alice', B, async () => {
     await go(B, '#/film/12');
@@ -341,6 +408,9 @@ const beenList = async (page) => {
   await step('alice changes her password, signs out, signs in with the new one', A, async () => {
     await go(A, '#/settings');
     await A.waitForSelector('#pw-form');
+    await A.fill('#pw-form [name=password]', 'abc');
+    await A.click('#pw-form .btn');
+    await until(async () => (await A.textContent('#pw-err')).includes('at least 6'), 'password error shown on the page');
     await A.fill('#pw-form [name=password]', 'newsecret456');
     await A.click('#pw-form .btn');
     await until(async () => (await A.textContent('#toast')).includes('Password updated'), 'password update');
@@ -365,6 +435,36 @@ const beenList = async (page) => {
     await A.waitForTimeout(1200);
     await A.reload();
     expect((await beenList(A)).length === 3, 'rows after remove');
+  });
+  await step('cara also uses another app: deleting her Movi data keeps her signed in, on the join screen, with nothing recreated', C, async () => {
+    await C.evaluate(async () => {
+      const V = '13.4.0', base = `https://www.gstatic.com/firebasejs/${V}`;
+      const [App, Fs, Au] = await Promise.all([import(`${base}/firebase-app.js`), import(`${base}/firebase-firestore.js`), import(`${base}/firebase-auth.js`)]);
+      await Fs.setDoc(Fs.doc(Fs.getFirestore(App.getApp()), 'pantry_users', Au.getAuth(App.getApp()).currentUser.uid), { pantry: [], updatedAt: Fs.serverTimestamp() });
+    });
+    const uid = await apiCall(C, 'return api.uid');
+    await go(C, '#/settings');
+    await C.waitForSelector('[data-act="delete-account"]');
+    await C.click('[data-act="delete-account"]');
+    await C.click('#dlg-ok');
+    await C.waitForSelector('#join-form', { timeout: 30000 });
+    expect((await apiCall(C, 'return api.uid')) === uid, 'she was signed out');
+    expect((await C.textContent('.auth h1')).includes(`Join Movi as @${uc}`), 'join screen heading: ' + await C.textContent('.auth h1'));
+    expect(!(await C.$('#join-form [name=username]')), 'existing username should not be editable');
+    await C.reload();
+    await C.waitForSelector('#join-form', { timeout: 20000 });
+    expect((await apiCall(C, 'return await api.getProfile(api.uid)')) === null, 'profile was recreated without asking');
+    await go(A, `#/u/${uc}`);
+    await A.waitForSelector('.empty h3');
+    // "Not now" signs out; signing in again still only offers to join
+    await C.click('#join-no');
+    await C.waitForSelector('.welcome');
+    expect((await apiCall(C, 'return api.uid')) === null, '"Not now" did not sign out');
+    await C.evaluate(([email]) => window.__emuSignIn(email, 'Cara Tester'), [mailC]);
+    await C.reload();
+    await C.waitForSelector('#join-form', { timeout: 20000 });
+    await C.click('#join-go');
+    await until(async () => (await apiCall(C, 'return (await api.getProfile(api.uid))?.username')) === uc, 'cara to be a member again with the same username');
   });
   await step('bob deletes his Movi data', B, async () => {
     await go(B, '#/settings');

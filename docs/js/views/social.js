@@ -20,7 +20,7 @@ export async function renderLeaderboard(view) {
   const box = $("#board");
   if (!box) return;
   if (!S.me && api.membersOnly) {
-    box.innerHTML = emptyHTML({ title: "Sign in to see the leaderboard", text: "Members' profiles and rankings are visible to signed-in members.", action: `<a class="btn primary" href="#/welcome">Join Movi</a>` });
+    box.innerHTML = emptyHTML({ title: "Sign in to see this on Movi", text: "The leaderboard is visible to signed-in members.", action: `<a class="btn primary" href="#/welcome">Sign in or join Movi</a>` });
     return;
   }
   if (boardTab === "following" && list.length <= 1) {

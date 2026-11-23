@@ -1,7 +1,7 @@
 import { $, esc, ICON, toast, debounce } from "../util.js";
 import { film, filmCount, searchFilms } from "../films.js";
 import { api } from "../api/index.js";
-import { S, loadSession, rankedCount, updateMe, rankedIds, myRows } from "../state.js";
+import { S, loadSession, clearSession, rankedCount, updateMe, rankedIds, myRows, takeReturn } from "../state.js";
 import { cardHTML, userRowHTML, avatarHTML, confirmDialog } from "../ui.js";
 import { followBtnHTML } from "./feed.js";
 import { sample, byPopularity } from "../variety.js";
@@ -16,11 +16,82 @@ let authTab = "signup";
 const GOOGLE_G = `<svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>`;
 
 // After any successful sign-in: load the member's data and go to onboarding or the feed.
+// Someone signed in who is not a Movi member yet gets the join screen instead (the router shows
+// it on every address until they join), and nothing is created for them.
+const reroute = () => document.dispatchEvent(new CustomEvent("movi:reroute"));
 async function enterApp() {
   await loadSession();
+  if (S.join) return reroute();
   if (!S.me) throw new Error("Couldn't load your profile. Try again.");
   document.dispatchEvent(new CustomEvent("movi:auth"));
-  location.hash = needsOnboarding() && rankedCount() === 0 && !S.backlog.length ? "#/onboarding" : "#/feed";
+  // A shared link that sent them to sign in wins over the usual landing page.
+  const target = takeReturn() || (needsOnboarding() && rankedCount() === 0 && !S.backlog.length ? "#/onboarding" : "#/feed");
+  if (location.hash === target) reroute(); else location.hash = target;
+}
+
+// ---------- Join Movi ----------
+// Shown to someone who is signed in (through another of our apps on this site, or with Google
+// for the first time) but has no Movi profile. Only the "Join Movi" button creates one.
+export function renderJoin(view) {
+  const j = S.join;
+  const fixed = !!j.username;
+  view.innerHTML = `<div class="join"><div class="auth">
+      <span class="logo big">movi</span>
+      <h1 class="h2m">${fixed ? `Join Movi as @${esc(j.username)}` : "Join Movi"}</h1>
+      <p class="muted">${fixed
+        ? `You're signed in${j.displayName ? ` as <b>${esc(j.displayName)}</b>` : ""}${j.email ? ` (${esc(j.email)})` : ""}. Your username is the one you already use in our other apps.`
+        : `You're signed in${j.email ? ` as ${esc(j.email)}` : ""}. Pick the username people will see.`}</p>
+      <form id="join-form" class="form" novalidate>
+        ${fixed ? "" : `<label>Your name<input name="display_name" maxlength="40" autocomplete="name" required value="${esc(j.displayName)}"></label>
+        <label>Username<span class="field"><span class="at">@</span><input name="username" maxlength="20" autocomplete="username" required value="${esc(j.suggested || "")}" pattern="[a-z0-9_.]{3,20}"></span><small id="u-hint" class="hint">3–20 characters: lowercase letters, numbers, _ and .</small></label>`}
+        <p class="muted small">Movi profiles and rankings are visible to other signed-in members.</p>
+        <p class="form-err" id="join-err" role="alert"></p>
+        <button class="btn primary block" id="join-go">Join Movi</button>
+        <button type="button" class="linkish center-t" id="join-no">Not now (sign out)</button>
+      </form>
+      <p class="legal">By joining, you agree to Movi's <a href="terms.html">Terms of service</a> and <a href="privacy.html">Privacy policy</a>.</p>
+    </div></div>`;
+  const form = $("#join-form"), err = $("#join-err"), u = form.username;
+  if (u) bindUsernameHint(u);
+  $("#join-no").addEventListener("click", async () => {
+    await api.signOut().catch(() => {});
+    document.dispatchEvent(new CustomEvent("movi:signedout"));
+  });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    err.textContent = "";
+    const name = u ? u.value : j.username;
+    const shown = fixed ? j.displayName : form.display_name.value.trim();
+    if (!fixed && !shown) return (err.textContent = "Tell us your name");
+    if (!/^[a-z0-9_.]{3,20}$/.test(name)) return (err.textContent = "Pick a username with 3–20 lowercase letters, numbers, _ or .");
+    const btn = $("#join-go");
+    btn.disabled = true;
+    try {
+      if (!fixed && (await api.usernameAvailable(name)) === false) throw new Error("That username is taken");
+      await api.join({ username: name, displayName: shown });
+      await enterApp();
+    } catch (ex) {
+      err.textContent = ex.message;
+      btn.disabled = false;
+    }
+  });
+}
+
+// Live "available / taken" under a username box.
+function bindUsernameHint(u) {
+  const check = debounce(async () => {
+    const hint = $("#u-hint");
+    if (!hint || !u.value) return;
+    if (!/^[a-z0-9_.]{3,20}$/.test(u.value)) { hint.textContent = "3–20 characters: lowercase letters, numbers, _ and ."; hint.className = "hint"; return; }
+    const name = u.value;
+    const ok = await api.usernameAvailable(name).catch(() => null);
+    if (u.value !== name) return;
+    hint.textContent = ok == null ? "3–20 characters: lowercase letters, numbers, _ and ." : ok ? `@${name} is available` : `@${name} is taken`;
+    hint.className = ok == null ? "hint" : ok ? "hint good" : "hint bad";
+  }, 300);
+  u.addEventListener("input", () => { u.value = u.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""); check(); });
+  if (u.value) check();
+  return check;
 }
 
 // Not async, and nothing runs before api.signInWithGoogle(): browsers only open the Google
@@ -80,25 +151,13 @@ export function renderWelcome(view) {
   const err = $("#auth-err");
   const u = form.username;
   if (u) {
-    u.addEventListener("input", () => { u.value = u.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""); checkName(); });
+    const checkName = bindUsernameHint(u);
     const nameField = form.display_name;
     nameField.addEventListener("input", () => {
       if (!u.dataset.touched) { u.value = nameField.value.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20); checkName(); }
     });
     u.addEventListener("keydown", () => { u.dataset.touched = "1"; });
   }
-  const checkName = debounce(async () => {
-    const hint = $("#u-hint");
-    if (!hint || !u.value) return;
-    if (!/^[a-z0-9_.]{3,20}$/.test(u.value)) { hint.textContent = "3–20 characters: lowercase letters, numbers, _ and ."; hint.className = "hint"; return; }
-    const name = u.value;
-    const ok = await api.usernameAvailable(name).catch(() => null);
-    if (u.value !== name) return;
-    // null: it can't be checked before you have an account; it's checked when you create it.
-    hint.textContent = ok == null ? "3–20 characters: lowercase letters, numbers, _ and ." : ok ? `@${name} is available` : `@${name} is taken`;
-    hint.className = ok == null ? "hint" : ok ? "hint good" : "hint bad";
-  }, 300);
-
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     err.textContent = "";
@@ -114,6 +173,7 @@ export function renderWelcome(view) {
     btn.textContent = authTab === "signup" ? "Creating account…" : "Signing in…";
     try {
       if (authTab === "signup") {
+        // Checked before the sign-in is created, so a taken name never leaves a half-made account.
         if ((await api.usernameAvailable(fd.username)) === false) throw new Error("That username is taken");
         await api.signUp({ email: fd.email, password: fd.password, username: fd.username, displayName: fd.display_name.trim() });
       } else {
@@ -188,9 +248,10 @@ export function renderSettings(view) {
       <p class="form-err" id="prof-err" role="alert"></p>
       <button class="btn primary">Save profile</button>
     </form>
-    ${api.canChangePassword ? `<form class="panel-card form" id="pw-form">
+    ${api.canChangePassword ? `<form class="panel-card form" id="pw-form" novalidate>
       <h3>Password</h3>
       <label>New password<input name="password" type="password" minlength="6" autocomplete="new-password" required></label>
+      <p class="form-err" id="pw-err" role="alert"></p>
       <button class="btn">Update password</button>
     </form>` : demo ? "" : `<div class="panel-card form"><h3>Password</h3><p class="muted">You sign in with Google, so there's no Movi password to change.</p></div>`}
     <div class="panel-card form">
@@ -237,12 +298,15 @@ export function renderSettings(view) {
   });
   $("#pw-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (e.target.password.value.length < 6) return toast("Password should be at least 6 characters");
+    // Errors stay on the page: "sign out and back in, then try again" (asked for after a long session) needs time to read.
+    const err = $("#pw-err");
+    err.textContent = "";
+    if (e.target.password.value.length < 6) return (err.textContent = "Password should be at least 6 characters");
     try {
       await api.updatePassword(e.target.password.value);
       e.target.reset();
       toast("Password updated");
-    } catch (ex) { toast(ex.message); }
+    } catch (ex) { err.textContent = ex.message; }
   });
 }
 
@@ -263,13 +327,17 @@ export function exportData() {
 export async function deleteAccount() {
   const ok = await confirmDialog({
     title: "Delete your Movi data?",
-    text: "This permanently deletes your Movi profile, rankings, notes, lists, follows, posts, likes and comments." + (api.mode === "demo" ? "" : " If you don't use this sign-in for any of our other apps, the sign-in and username are deleted too.") + " This can't be undone.",
+    text: "This permanently deletes your Movi profile, rankings, notes, lists, follows, posts, likes and comments." + (api.mode === "demo" ? "" : " If you don't use this sign-in for any of our other apps, the sign-in and username are deleted too; otherwise you stay signed in and your other apps are untouched.") + " This can't be undone.",
     ok: "Delete forever", danger: true,
   });
   if (!ok) return;
   try {
     await api.deleteAccount();
     toast("Your Movi data was deleted");
-    document.dispatchEvent(new CustomEvent("movi:signedout"));
+    clearSession();
+    // Still signed in (another of our apps uses this sign-in): they land on the join screen, and
+    // nothing is recreated unless they choose to join again.
+    if (api.uid) await enterApp();
+    else document.dispatchEvent(new CustomEvent("movi:signedout"));
   } catch (e) { toast(e.message); }
 }
