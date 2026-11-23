@@ -24,6 +24,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -33,7 +34,7 @@ UA = "film-db-builder/1.0 (static film list; python urllib)"
 SPARQL = "https://query.wikidata.org/sparql"
 MIN_LINKS_NEW = 20          # a new film must be covered by at least this many Wikipedias
 THIS_YEAR = datetime.date.today().year
-FILM_TYPES = "wd:Q11424 wd:Q24869 wd:Q202866 wd:Q29168811 wd:Q229390"  # film, feature film, animated film, animated feature film, 3D film
+FILM_TYPES = "wd:Q11424 wd:Q24869 wd:Q202866 wd:Q29168811 wd:Q229390 wd:Q20650540 wd:Q226730"  # film, feature film, animated film, animated feature film, 3D film, anime film, silent film
 POSTER_PREFIX = "https://upload.wikimedia.org/wikipedia/"
 
 # Fame (Wikipedia language count) -> the 0-100 popularity the site sorts by. Hand-picked canon
@@ -94,7 +95,8 @@ def lookup_existing(titles, cache):
         rows = sparql(f"""SELECT ?t ?f ?links (GROUP_CONCAT(DISTINCT ?alt; separator="|") AS ?alts) WHERE {{
           VALUES ?t {{ {' '.join(lit(t) for t in part)} }}
           ?a schema:name ?t ; schema:isPartOf <https://en.wikipedia.org/> ; schema:about ?f .
-          ?f wikibase:sitelinks ?links .
+          VALUES ?type {{ {FILM_TYPES} }}
+          ?f wdt:P31 ?type ; wikibase:sitelinks ?links .   # a film, not a franchise or a TV series the article is about
           OPTIONAL {{ ?f skos:altLabel ?alt FILTER(LANG(?alt) IN ("en", "mul")) }}
         }} GROUP BY ?t ?f ?links""")
         for t in part:
@@ -184,44 +186,38 @@ def details_for(qids, cache):
     return known
 
 
-def summary_for(titles, cache, minutes=25):
-    """Wikipedia article title -> {plot, poster}, 20 articles per request.
+def summary_for(titles, cache, minutes=100):
+    """Wikipedia article title -> {plot, poster} from the page summary, one article at a time.
 
-    Wikipedia limits anonymous traffic tightly, so this goes slowly, backs off when told to, and
+    Wikipedia limits anonymous traffic, so this is deliberately slow, waits when told to, and
     stops after `minutes`. Whatever is missing is picked up the next time the script runs.
     """
     known = cache.setdefault("summaries", {})
     todo = [t for t in titles if t not in known]
-    api = "https://en.wikipedia.org/w/api.php?"
     deadline = time.time() + minutes * 60
-    for n, part in enumerate(chunks(todo, 20)):
+    for n, t in enumerate(todo):
         if time.time() > deadline:
             print("  time is up for this run; run the script again later for the rest", flush=True)
             break
-        params = {"action": "query", "format": "json", "formatversion": "2", "redirects": "1", "prop": "extracts|pageimages",
-                  "exintro": "1", "explaintext": "1", "exlimit": "20", "piprop": "thumbnail", "pithumbsize": "330", "pilicense": "any",
-                  "pilimit": "20", "titles": "|".join(part)}
-        q = None
-        for wait in (0, 45, 90, 180):
-            time.sleep(wait)
+        url = "https://en.wikipedia.org/api/rest_v1/page/summary/" + urllib.parse.quote(t.replace(" ", "_"), safe="")
+        for attempt in range(4):
             try:
-                q = http(api + urllib.parse.urlencode(params), tries=1).get("query", {})
+                req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=40) as res:
+                    d = json.loads(res.read().decode("utf-8"))
+                known[t] = {"plot": d.get("extract", ""), "poster": (d.get("thumbnail") or {}).get("source", "")}
                 break
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    known[t] = {"plot": "", "poster": ""}
+                    break
+                time.sleep(int(e.headers.get("Retry-After") or 5) + 2 + attempt * 10)
             except Exception:
-                q = None
-        if q is None:
-            continue  # left out of the cache, so the next run asks again
-        back = {}
-        for step in q.get("normalized", []) + q.get("redirects", []):
-            back[step["to"]] = back.get(step["from"], step["from"])
-        for page in q.get("pages", []):
-            if page.get("missing"):
-                continue
-            known[back.get(page["title"], page["title"])] = {"plot": page.get("extract", ""), "poster": (page.get("thumbnail") or {}).get("source", "")}
-        if n % 5 == 0:
+                time.sleep(5 + attempt * 10)
+        if n % 100 == 0:
             save(cache)
-            print(f"  descriptions and posters: {min((n + 1) * 20, len(todo))}/{len(todo)}", flush=True)
-        time.sleep(3)
+            print(f"  descriptions and posters: {n}/{len(todo)}", flush=True)
+        time.sleep(0.6)
     save(cache)
     return known
 
@@ -265,12 +261,42 @@ def poster_path(url):
     return url[len(POSTER_PREFIX):] if url.startswith(POSTER_PREFIX) else url
 
 
+def word_key(title):
+    """Words of a title without a leading article, for spotting the same film under a slightly different name."""
+    words = re.findall(r"[a-z0-9]+", title.lower().replace("&", " and "))
+    if len(words) > 1 and words[0] in ("the", "a", "an"):
+        words = words[1:]
+    return " ".join(words)
+
+
+SEQUEL_WORD = re.compile(r"^(\d+|[ivx]+|part|chapter|vol|volume|episode|returns|reloaded|revolutions|resurrection|reborn|rises|forever)$")
+
+
+def same_name(a, b):
+    return word_key(a) == word_key(b)
+
+
+def long_form_of(long, short):
+    """True when `long` is a wordier form of `short`: "Dr. Strangelove or: How I Learned…" of "Dr. Strangelove".
+    A sequel ("Toy Story 2" of "Toy Story") is not."""
+    long, short = word_key(long), word_key(short)
+    if len(short) < 6 or not long.startswith(short + " "):
+        return False
+    return not SEQUEL_WORD.match(long[len(short) + 1:].split(" ")[0])
+
+
+def same_film(a, b):
+    return same_name(a, b) or long_form_of(a, b)
+
+
 def better_title(old, label):
     """The common English name, when it is a tidier form of the stored one."""
     m = re.match(r"^(.*), (The|A|An)$", old)
     if m:
         return f"{m.group(2)} {m.group(1)}"
-    return label or old
+    # Only a tidier form of the same name ("Birdman or (...)" -> "Birdman"). A different name
+    # ("The Road Warrior" / "Mad Max 2") stays as it is and the other becomes searchable instead.
+    return label if label and same_film(old, label) else old
 
 
 def alt_names(title, names):
@@ -304,11 +330,10 @@ def main(out, refresh=False):
     # 1. existing films: fame, common name, other names
     print("Looking up existing films…", flush=True)
     info = lookup_existing(sorted({h for h in hrefs if h}), cache)
-    have_q, renamed, boosted, aliased = set(), 0, 0, 0
-    for fid, row in enumerate(films):
-        w = info.get(hrefs[fid]) if hrefs[fid] else None
-        if not w:
-            continue
+    have_q, stats = set(), {"renamed": 0, "boosted": 0, "aliased": 0, "merged": 0}
+
+    def apply(fid, w):
+        row = films[fid]
         have_q.add(w["q"])
         old = row[0]
         names = [old] + ([w["label"]] if w["label"] else []) + w["alt"]
@@ -317,30 +342,49 @@ def main(out, refresh=False):
             title = better_title(old, w["label"] if w["links"] >= 30 else "")
         if title != old:
             row[0] = title
-            renamed += 1
+            stats["renamed"] += 1
         pop = pop_for(w["links"])
         if pop > row[4]:
             row[4] = pop
-            boosted += 1
+            stats["boosted"] += 1
         alts = alt_names(row[0], names) if w["links"] >= 15 or title != old else alt_names(row[0], [old])
         del row[5:]
         if alts:
             row.append(alts)
-            aliased += 1
+            stats["aliased"] += 1
+
+    matched = set()
+    for fid in range(len(films)):
+        w = info.get(hrefs[fid]) if hrefs[fid] else None
+        if w:
+            matched.add(fid)
+            apply(fid, w)
 
     # 2. well-known films the database lacks
     print("Finding well-known films that are missing…", flush=True)
     cands = find_new(cache)
-    have_key = {(norm(r[0]), r[1]) for r in films}
     have_href = {h for h in hrefs if h}
+    by_year = {}
+    for fid, r in enumerate(films):
+        by_year.setdefault(r[1], []).append(fid)
     new = []
-    for q, c in cands.items():
-        if q in have_q or c["title"] in have_href or not (1880 <= c["year"] <= THIS_YEAR):
+    for q, c in sorted(cands.items(), key=lambda x: (-x[1]["links"], x[0])):
+        if q in have_q or c["title"] in have_href or not (1880 <= c["year"] <= THIS_YEAR) or not word_key(c["label"]):
             continue
-        key = norm(c["label"])
-        if not key or any((key, c["year"] + d) in have_key for d in (0, -1, 1)):
+        near = [fid for d in (0, -1, 1) for fid in by_year.get(c["year"] + d, [])]
+        twin = next((fid for fid in near if same_name(films[fid][0], c["label"])), None)
+        if twin is None:  # an entry with no Wikidata link whose title is a wordier form of this film's name
+            twin = next((fid for fid in near if fid not in matched and long_form_of(films[fid][0], c["label"])), None)
+        if twin is not None:
+            # Already here under a slightly different name or an old article link: improve that entry instead.
+            if twin not in matched:
+                matched.add(twin)
+                apply(twin, {"q": q, "links": c["links"], "label": c["label"], "alt": []})
+                load_shard(twin // shard)[twin % shard][2] = c["title"].replace(" ", "_")
+                stats["merged"] += 1
             continue
         new.append((q, c))
+        by_year.setdefault(c["year"], [])
     new.sort(key=lambda x: (-x[1]["links"], x[0]))
     print(f"  {len(new)} to add", flush=True)
     det = details_for([q for q, _ in new], cache)
@@ -371,7 +415,7 @@ def main(out, refresh=False):
         films.append(row)
         rest_posters.append("")  # the poster stays in the index row, so it shows on first paint
         load_shard(fid // shard).append([d.get("cast", [])[:10], clean_plot(plot), c["title"].replace(" ", "_")])
-        have_key.add((norm(c["label"]), c["year"]))
+        by_year[c["year"]].append(fid)
         added += 1
 
     # films added on an earlier run that were still waiting for their Wikipedia poster and description
@@ -406,7 +450,8 @@ def main(out, refresh=False):
     js_dir = os.path.join(os.path.dirname(os.path.abspath(out)), "js")
     with open(os.path.join(js_dir, "data-version.js"), "w", encoding="utf-8") as f:
         f.write(f'// Written by the tools/ data scripts. Changes whenever the film data changes.\nexport const DATA_VERSION = "{version}";\n')
-    print(f"{len(films)} films: {added} added, {boosted} made more prominent, {renamed} retitled, {aliased} with other searchable names")
+    print(f"{len(films)} films: {added} added, {stats['boosted']} made more prominent, {stats['renamed']} retitled, "
+          f"{stats['merged']} matched to an existing entry, {stats['aliased']} with other searchable names")
 
 
 if __name__ == "__main__":
