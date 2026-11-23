@@ -1,8 +1,8 @@
-import { $, esc, ICON, timeAgo, toast } from "../util.js";
+import { $, esc, ICON, timeAgo } from "../util.js";
 import { film, allFilms, genres } from "../films.js";
 import { genreAffinity } from "../model.js";
 import { api } from "../api/index.js";
-import { S, followingIds, myRows, pendingRequests, approveFollower, removeFollower, refreshUnread, reloadFollows } from "../state.js";
+import { S, followingIds, myRows, refreshUnread, reloadFollows } from "../state.js";
 import { avatarHTML, emptyHTML, spinnerHTML, userRowHTML, userHref, posterHTML, cardHTML, demoTag, withTransition } from "../ui.js";
 import { followBtnHTML } from "./feed.js";
 import { sample, softmax } from "../variety.js";
@@ -19,6 +19,10 @@ export async function renderLeaderboard(view) {
   const list = await api.listProfiles({ ids, limit: 100 });
   const box = $("#board");
   if (!box) return;
+  if (!S.me && api.membersOnly) {
+    box.innerHTML = emptyHTML({ title: "Sign in to see the leaderboard", text: "Members' profiles and rankings are visible to signed-in members.", action: `<a class="btn primary" href="#/welcome">Join Movi</a>` });
+    return;
+  }
   if (boardTab === "following" && list.length <= 1) {
     box.innerHTML = emptyHTML({ title: "Follow people to compete", text: "Your friends leaderboard shows you and everyone you follow.", action: `<a class="btn primary" href="#/people">${ICON.users} Find people</a>` });
     return;
@@ -32,8 +36,6 @@ export async function renderLeaderboard(view) {
 
 const NOTE_TEXT = {
   follow: () => "started following you",
-  follow_request: () => "wants to follow you",
-  follow_accepted: () => "accepted your follow request",
   like: (n) => `liked your ranking of <b>${esc(film(n.film_id)?.title || "a film")}</b>`,
   comment: (n) => `commented on <b>${esc(film(n.film_id)?.title || "your post")}</b>: “${esc(n.body)}”`,
   rec: (n) => `recommended <b>${esc(film(n.film_id)?.title || "a film")}</b>${n.body ? `: “${esc(n.body)}”` : ""}`,
@@ -43,30 +45,21 @@ export async function renderNotifications(view) {
   view.innerHTML = `<div class="list-head"><h1>Notifications</h1></div><div id="nbox">${spinnerHTML()}</div>`;
   await reloadFollows().catch(() => {});
   const items = await api.getNotifications(60);
-  const reqs = pendingRequests();
   const box = $("#nbox");
   if (!box) return;
   box.innerHTML = `
-    ${reqs.length ? `<div class="panel-card"><h3>Follow requests</h3>${reqs.map((r) => userRowHTML(r.profile, `<button class="btn sm primary" data-act="approve" data-uid="${r.id}">Approve</button><button class="btn sm ghost" data-act="decline" data-uid="${r.id}">Decline</button>`)).join("")}</div>` : ""}
     ${items.length ? `<div class="notes">${items.map((n) => {
       const a = n.actor;
-      if (!a) return "";
+      if (!a || !NOTE_TEXT[n.kind]) return "";
       const target = n.film_id != null ? `data-film="${n.film_id}"` : "";
-      const right = ["follow", "follow_accepted"].includes(n.kind) ? followBtnHTML(a) : n.film_id != null && film(n.film_id) ? `<button class="nposter" ${target}>${posterHTML(film(n.film_id), "s")}</button>` : "";
+      const right = n.kind === "follow" ? followBtnHTML(a) : n.film_id != null && film(n.film_id) ? `<button class="nposter" ${target}>${posterHTML(film(n.film_id), "s")}</button>` : "";
       return `<div class="note-row ${n.read ? "" : "unread"}"><a href="${userHref(a)}">${avatarHTML(a, 40)}</a>
-        <div><a class="uname" href="${userHref(a)}">${esc(a.display_name || a.username)}</a> ${NOTE_TEXT[n.kind]?.(n) || ""}<small>${timeAgo(n.created_at)}</small></div>${right}</div>`;
-    }).join("")}</div>` : reqs.length ? "" : emptyHTML({ title: "No notifications yet", text: "Likes, comments, new followers and recommendations show up here." })}`;
+        <div><a class="uname" href="${userHref(a)}">${esc(a.display_name || a.username)}</a> ${NOTE_TEXT[n.kind](n)}<small>${timeAgo(n.created_at)}</small></div>${right}</div>`;
+    }).join("")}</div>` : emptyHTML({ title: "No notifications yet", text: "Likes, comments, new followers and recommendations show up here." })}`;
   if (items.some((n) => !n.read)) {
     await api.markNotificationsRead().catch(() => {});
     refreshUnread();
   }
-}
-
-export async function handleRequest(uid, approve) {
-  try {
-    if (approve) await approveFollower(uid); else await removeFollower(uid);
-    toast(approve ? "Request approved" : "Request declined");
-  } catch (e) { toast(e.message); }
 }
 
 export async function renderPeople(view) {
@@ -77,7 +70,7 @@ export async function renderPeople(view) {
   const all = await api.listProfiles({ limit: 100 });
   const mine = myRows();
   let theirRows = [];
-  try { theirRows = await api.rankingsOfUsers(all.filter((p) => p.id !== S.me.id && !p.is_private).map((p) => p.id).slice(0, 40)); } catch {}
+  try { theirRows = await api.rankingsOfUsers(all.filter((p) => p.id !== S.me.id).map((p) => p.id).slice(0, 40)); } catch {}
   const byUser = new Map();
   theirRows.forEach((r) => (byUser.get(r.user_id) || byUser.set(r.user_id, []).get(r.user_id)).push(r));
   const mineSet = new Set(mine.map((r) => r.film_id));
@@ -99,7 +92,7 @@ const picked = new Set();
 export async function renderTogether(view) {
   view.innerHTML = `<div class="list-head"><div><h1>Watch together</h1><p class="sub-line">Pick who's watching. Movi finds films nobody has seen that the group is likely to love.</p></div></div><div id="tbox">${spinnerHTML()}</div>`;
   const { following } = await api.getFollows(S.me.id);
-  const friends = following.filter((f) => f.status === "accepted" && f.profile);
+  const friends = following.filter((f) => f.profile);
   const box = $("#tbox");
   if (!box) return;
   if (!friends.length) {

@@ -10,6 +10,7 @@ const EXAMPLE = "karate kid, star wars 1, star wars 2, harry potter";
 let draft = "";
 let review = null;
 let usedAi = false;
+let aiNote = "";
 let owner = null;
 
 export function renderToRank(body) {
@@ -18,7 +19,7 @@ export function renderToRank(body) {
     owner = S.me?.id;
     clearReview();
   }
-  const live = api.mode === "supabase";
+  const live = api.mode !== "demo";
   body.innerHTML = `
     <section class="panel-card bulk">
       <h3>Add movies you've watched</h3>
@@ -34,7 +35,7 @@ export function renderToRank(body) {
         acts: `<div class="acts"><button data-act="rank" data-id="${b.film_id}">Rank</button><button data-act="unbacklog" data-id="${b.film_id}">Remove</button></div>`,
       })).join("")}</div>`
     : `<div class="mt-5">${emptyHTML({ title: "Nothing waiting to be ranked", text: "Films you add above land here, so you can rank them whenever you have a minute." })}</div>`}
-    ${api.backlogLocal ? `<p class="muted small center-t">Your To rank list is saved on this device until the To rank database table is set up.</p>` : ""}`;
+`;
   const ta = $("#bulk-text");
   const count = () => { const n = ta.value.split(/[\n,;]+/).filter((x) => x.trim()).length; $("#bulk-count").textContent = n ? `${n} title${n === 1 ? "" : "s"}` : ""; };
   ta.addEventListener("input", () => { draft = ta.value; count(); });
@@ -49,9 +50,11 @@ export async function runMatch() {
   draft = text;
   const box = $("#bulk-review");
   box.innerHTML = spinnerHTML("Finding your movies…");
-  const res = await matchTitles(text, { useAi: api.mode === "supabase" });
+  const res = await matchTitles(text, { useAi: api.mode !== "demo" });
   review = res.items;
   usedAi = res.usedAi;
+  // The AI step has a daily limit; when it's reached the built-in matching still does the job.
+  aiNote = !usedAi && api.matchError ? api.matchError : "";
   drawReview();
 }
 
@@ -84,6 +87,7 @@ function drawReview() {
   });
   const ids = collectIds();
   box.innerHTML = `<div class="review-head"><b>${review.filter((it) => it.film != null).length} of ${review.length} matched</b>${usedAi ? `<span class="tag ai">${ICON.sparkle} Matched with AI</span>` : ""}</div>
+    ${aiNote ? `<p class="muted small">${esc(aiNote)} Matched without AI this time.</p>` : ""}
     <div class="match-list">${rows.join("")}</div>
     <div class="bulk-acts"><button class="btn primary" data-act="bulk-add" ${ids.length ? "" : "disabled"}>${ICON.plus} Add ${ids.length} to To rank</button><button class="btn ghost" data-act="bulk-clear">Start over</button></div>`;
   box.querySelectorAll("[data-change]").forEach((b) => b.addEventListener("click", () => {
@@ -146,5 +150,6 @@ export async function addReviewed() {
 
 export function clearReview() {
   review = null;
+  aiNote = "";
   draft = "";
 }

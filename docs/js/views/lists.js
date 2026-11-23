@@ -116,14 +116,14 @@ async function renderRecs(body) {
     const f = film(r.film_id);
     if (!f) return "";
     const s = scoreOf(f.id);
-    return `<div class="rec" data-rec="${r.id}">
+    return `<div class="rec" data-rec="${esc(r.id)}">
       <button class="pposter" data-film="${f.id}">${posterHTML(f, "s")}</button>
       <div class="rec-body">
         <div class="rec-from">${avatarHTML(r.profile, 28)} ${r.profile ? nameHTML(r.profile) : "Someone"} <span class="muted">recommended · ${timeAgo(r.created_at)}</span></div>
         <button class="ftitle big" data-film="${f.id}">${esc(f.title)} <span class="muted">${f.year}</span></button>
         ${r.message ? `<p class="rec-msg">“${esc(r.message)}”</p>` : ""}
         <div class="rec-acts">${s ? `<span class="pmine">You ranked it ${scoreHTML(s.score)}</span>` : `<button class="btn sm primary" data-act="rank" data-id="${f.id}">Watched it</button><button class="btn sm" data-act="watch-from" data-id="${f.id}" data-from="${esc(r.from_user)}">${ICON.bookmark} Save</button>`}
-          <button class="btn sm ghost" data-act="dismiss-rec" data-id="${r.id}">Dismiss</button></div>
+          <button class="btn sm ghost" data-act="dismiss-rec" data-id="${esc(r.id)}">Dismiss</button></div>
       </div></div>`;
   }).join("")}</div>`;
 }

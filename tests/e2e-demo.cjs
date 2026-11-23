@@ -10,7 +10,8 @@ const log = (...a) => console.log(...a);
   // Always run in demo mode, whatever docs/config.js points at, so tests never touch a real project.
   await ctx.route('**/config.js', r => r.fulfill({ contentType: 'application/javascript', body: 'window.MOVI_CONFIG={};' }));
   const page = await ctx.newPage();
-  const errors = [];
+  const errors = [], requests = [];
+  ctx.on('request', r => requests.push(r.url()));
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|ERR_|net::/.test(m.text())) errors.push('console: ' + m.text()); });
   const shot = (n, full = false) => page.screenshot({ path: `${SH}/${n}.png`, fullPage: full });
@@ -131,11 +132,21 @@ const log = (...a) => console.log(...a);
     await page.waitForSelector('.compare-hero');
   });
   await shot('12-compare', true);
-  await step('private profile request', async () => {
+  await step('every profile is public: rankings show without following, follow is immediate', async () => {
     await page.goto(BASE + '#/u/jules.indie');
-    await page.waitForSelector('.empty h3');
-    await page.click('.phead [data-act="follow"]');
-    await page.waitForSelector('.phead [data-act="unfollow"]');
+    await page.waitForSelector('.phead');
+    await page.waitForSelector('#ptab .rowi');
+    if (await page.$('.phead .lock')) throw new Error('private badge still shown');
+    const btn = await page.$('.phead [data-act="follow"]');
+    if (btn) {
+      await btn.click();
+      await page.waitForSelector('.phead [data-act="unfollow"]');
+    }
+    if ((await page.textContent('.phead [data-act="unfollow"]')).trim() !== 'Following') throw new Error('follow was not immediate');
+  });
+  await step('no Firebase or other backend requests in demo mode', async () => {
+    const bad = requests.filter(u => /gstatic\.com\/firebasejs|googleapis\.com\/(?!css)|firebaseio|cloudfunctions|supabase|127\.0\.0\.1:(9099|8080|5001)/.test(u));
+    if (bad.length) throw new Error('unexpected requests: ' + bad.slice(0, 3).join(', '));
   });
   await step('leaderboard', async () => {
     await page.goto(BASE + '#/leaderboard');
@@ -159,6 +170,7 @@ const log = (...a) => console.log(...a);
   });
   await step('settings save', async () => {
     await page.goto(BASE + '#/settings');
+    if (await page.$('[name=is_private]')) throw new Error('private account switch still shown');
     await page.fill('[name=bio]', 'I rank everything');
     await page.click('#prof-form .btn.primary');
     await page.waitForTimeout(300);

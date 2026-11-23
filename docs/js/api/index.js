@@ -1,22 +1,30 @@
-// Picks the backend. Fill in docs/config.js to switch from demo mode to Supabase.
+// Picks the backend: Firebase when docs/config.js has the project's settings (or on localhost
+// with ?emulator, for local testing against the Firebase emulators); otherwise demo mode.
 //
-// Contract shared by api/demo.js and api/supabase.js (all methods async):
-//   auth:     uid, signUp, signIn, signInWithGoogle, supportsGoogle, userMeta, signOut, resetPassword, updatePassword, usernameAvailable, deleteAccount
-//   profiles: getProfile, getProfileByUsername, updateProfile, searchUsers, listProfiles
+// Contract shared by api/demo.js and api/firebase.js (all methods async unless noted):
+//   auth:     uid, mode, membersOnly, signUp, signIn, signInWithGoogle (NOT async: call it straight from the click),
+//             supportsGoogle, userMeta, signOut, resetPassword, canChangePassword, updatePassword,
+//             usernameAvailable (true / false / null = can't tell yet), deleteAccount
+//   profiles: getProfile, getProfileByUsername, updateProfile, searchUsers (prefix match), listProfiles, placeOf
 //   rankings: getRankings, rankingsOfUsers, rankingsForFilm, saveLists, updateEntry
 //   watch:    getWatchlist, addWatch, removeWatch
-//   social:   follow, unfollow, removeFollower, approveFollower, getFollows
+//   social:   follow (always immediate), unfollow, removeFollower, getFollows
 //   feed:     postActivity, deleteActivity, getFeed, like, unlike, getComments, addComment, deleteComment
 //   inbox:    getNotifications, unreadCount, markNotificationsRead, sendRec, getRecsForMe, deleteRec
 //   stats:    filmStats, topFilms
-//   to rank:  getBacklog, addBacklog, removeBacklog, backlogLocal, matchTitles (AI; null when unavailable)
+//   to rank:  getBacklog, addBacklog, removeBacklog, matchTitles (AI; null when unavailable), matchError
+// Rows use snake_case (user_id, film_id, display_name, created_at as ISO text, ...). Ids of posts,
+// comments, recommendations and notifications are opaque: pass them back exactly as given.
+import { wantsEmulator } from "../core.js";
+
 export let api = null;
 
 export async function initApi() {
   const cfg = window.MOVI_CONFIG || {};
-  if (cfg.supabaseUrl && cfg.supabaseAnonKey) {
-    const { createSupabaseApi } = await import("./supabase.js");
-    api = await createSupabaseApi({ url: cfg.supabaseUrl, anonKey: cfg.supabaseAnonKey });
+  const emulator = wantsEmulator("movi");
+  if (cfg.firebase || emulator) {
+    const { createFirebaseApi } = await import("./firebase.js");
+    api = await createFirebaseApi({ config: cfg.firebase || null, appCheckSiteKey: cfg.appCheckSiteKey || null, emulator });
   } else {
     const { createDemoApi } = await import("./demo.js");
     api = await createDemoApi();

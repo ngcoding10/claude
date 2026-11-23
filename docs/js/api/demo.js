@@ -1,4 +1,4 @@
-// Demo backend: same contract as api/supabase.js, stored in this browser's localStorage.
+// Demo backend: same contract as api/firebase.js, stored in this browser's localStorage.
 // It seeds a small fictional community so the social side of Movi can be tried without a server.
 import { allFilms, genres } from "../films.js";
 import { scoreFor, ORDER } from "../model.js";
@@ -18,7 +18,7 @@ const PEOPLE = [
   ["amara.reviews", "Amara Okafor", "Tough grader. A 9 from me means something.", 0, ["Drama", "Biography", "Historical"], 1],
   ["sam.popcorn", "Sam Rivera", "Here for a good laugh and a better snack.", 50, ["Comedy", "Teen", "Family"], 0],
   ["noor.nightly", "Noor Haddad", "Whodunits, heists and slow-burn mysteries.", 260, ["Mystery", "Crime", "Thriller"], 0],
-  ["jules.indie", "Jules Moreau", "Private account. Festival circuit regular.", 160, ["Independent", "Drama", "Comedy"], 1, true],
+  ["jules.indie", "Jules Moreau", "Festival circuit regular. Small films, big feelings.", 160, ["Independent", "Drama", "Comedy"], 1],
 ];
 
 const NOTES = {
@@ -50,12 +50,12 @@ function seedWorld() {
   const ids = PEOPLE.map((_, i) => `demo-${i + 1}`);
   const G = genres();
 
-  PEOPLE.forEach(([username, name, bio, hue, likes, harsh, priv], i) => {
+  PEOPLE.forEach(([username, name, bio, hue, likes, harsh], i) => {
     const id = ids[i];
     const r = rng(1000 + i * 77);
     w.users[id] = {
       email: null,
-      profile: { id, username, display_name: name, bio, avatar_hue: hue, is_private: !!priv, yearly_goal: 52 + i * 8, ranked_count: 0, created_at: iso(now - (200 + i * 9) * DAY), demo: true },
+      profile: { id, username, display_name: name, bio, avatar_hue: hue, yearly_goal: 52 + i * 8, ranked_count: 0, created_at: iso(now - (200 + i * 9) * DAY), demo: true },
     };
     const weighted = pool.map((f) => {
       const match = f.g.filter((g) => likes.includes(G[g])).length;
@@ -112,7 +112,7 @@ function seedWorld() {
   const r = rng(4242);
   ids.forEach((a) => {
     const others = ids.filter((b) => b !== a).sort(() => r() - 0.5).slice(0, 4 + Math.floor(r() * 4));
-    for (const b of others) w.follows.push({ follower: a, followee: b, status: "accepted", created_at: iso(now - Math.floor(r() * 100) * DAY) });
+    for (const b of others) w.follows.push({ follower: a, followee: b, created_at: iso(now - Math.floor(r() * 100) * DAY) });
   });
   for (const act of w.activities) {
     const fans = w.follows.filter((f) => f.followee === act.user_id).map((f) => f.follower);
@@ -129,6 +129,13 @@ export async function createDemoApi() {
   let w;
   try { w = JSON.parse(localStorage.getItem(KEY)); } catch {}
   if (!w || w.v !== 1) w = seedWorld();
+  // Worlds saved before private accounts and follow requests were removed: every account is public now.
+  for (const u of Object.values(w.users)) {
+    delete u.profile.is_private;
+    if (u.profile.demo && /^Private account\. /.test(u.profile.bio)) u.profile.bio = u.profile.bio.replace(/^Private account\. /, "");
+  }
+  w.follows.forEach((f) => { delete f.status; });
+  w.notifications = w.notifications.filter((n) => !["follow_request", "follow_accepted"].includes(n.kind));
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(w)); } catch {} };
   save();
   let uid = null;
@@ -136,11 +143,10 @@ export async function createDemoApi() {
   if (uid && !w.users[uid]) uid = null;
 
   const prof = (id) => w.users[id]?.profile || null;
-  const canView = (target) => {
-    const p = prof(target);
-    if (!p) return false;
-    return target === uid || !p.is_private || w.follows.some((f) => f.follower === uid && f.followee === target && f.status === "accepted");
-  };
+  // Every account is visible to everyone; only accounts that still exist can be viewed.
+  const canView = (target) => !!prof(target);
+  // Ids of posts, comments and recs are numbers here; the views hand them back as text.
+  const num = (id) => Number(id);
   const notify = (user_id, actor_id, kind, extra = {}) => {
     if (user_id === actor_id) return;
     w.notifications.push({ id: w.seq++, user_id, actor_id, kind, activity_id: null, film_id: null, body: "", read: false, created_at: iso(Date.now()), ...extra });
@@ -160,6 +166,9 @@ export async function createDemoApi() {
 
   const api = {
     mode: "demo",
+    membersOnly: false,
+    matchError: null,
+    canChangePassword: true,
     onChange: null,
     get uid() { return uid; },
 
@@ -171,7 +180,7 @@ export async function createDemoApi() {
       const id = "u-" + Math.random().toString(36).slice(2, 10);
       w.users[id] = {
         email, pw: await hashPw(password),
-        profile: { id, username, display_name: displayName || username, bio: "", avatar_hue: Math.floor(Math.random() * 360), is_private: false, yearly_goal: 52, ranked_count: 0, created_at: iso(Date.now()) },
+        profile: { id, username, display_name: displayName || username, bio: "", avatar_hue: Math.floor(Math.random() * 360), yearly_goal: 52, ranked_count: 0, created_at: iso(Date.now()) },
       };
       w.rankings[id] = [];
       w.watch[id] = [];
@@ -188,7 +197,7 @@ export async function createDemoApi() {
       try { localStorage.setItem(SESSION, uid); } catch {}
     },
     supportsGoogle: false,
-    async signInWithGoogle() { throw new Error("Google sign-in needs the live server. Connect Supabase in config.js first."); },
+    signInWithGoogle() { return Promise.reject(new Error("Google sign-in needs the live server.")); },
     async userMeta() { return null; },
     async signOut() { uid = null; try { localStorage.removeItem(SESSION); } catch {} },
     async resetPassword() { throw new Error("Password reset needs a server. In demo mode, create a new account instead."); },
@@ -223,21 +232,25 @@ export async function createDemoApi() {
     async updateProfile(patch) {
       requireUser();
       if (patch.username && patch.username !== prof(uid).username && !(await api.usernameAvailable(patch.username))) throw new Error("That username is taken");
-      const allowed = ["username", "display_name", "bio", "avatar_hue", "is_private", "yearly_goal"];
+      const allowed = ["username", "display_name", "bio", "avatar_hue", "yearly_goal"];
       for (const k of allowed) if (k in patch) w.users[uid].profile[k] = patch[k];
-      if (patch.is_private === false) w.follows.forEach((f) => { if (f.followee === uid && f.status === "pending") f.status = "accepted"; });
       save();
       return clone(prof(uid));
     },
     async searchUsers(q, limit = 20) {
-      const s = q.trim().toLowerCase();
+      const s = q.trim().replace(/^@+/, "").toLowerCase();
       if (!s) return [];
-      return clone(Object.values(w.users).map((u) => u.profile).filter((p) => p.username.includes(s) || p.display_name.toLowerCase().includes(s)).slice(0, limit));
+      // Prefix match, like the live backend.
+      return clone(Object.values(w.users).map((u) => u.profile).filter((p) => p.username.startsWith(s) || p.display_name.toLowerCase().startsWith(s)).sort((a, b) => b.ranked_count - a.ranked_count).slice(0, limit));
     },
     async listProfiles({ ids = null, limit = 50 } = {}) {
       let ps = Object.values(w.users).map((u) => u.profile);
       if (ids) ps = ps.filter((p) => ids.includes(p.id));
       return clone(ps.sort((a, b) => b.ranked_count - a.ranked_count).slice(0, limit));
+    },
+    async placeOf(profile) {
+      if (!profile) return 0;
+      return Object.values(w.users).filter((u) => u.profile.ranked_count > profile.ranked_count).length + 1;
     },
 
     async getRankings(userId) { return canView(userId) ? clone(w.rankings[userId] || []) : []; },
@@ -303,41 +316,26 @@ export async function createDemoApi() {
       if (id === uid) throw new Error("You can't follow yourself");
       let f = w.follows.find((x) => x.follower === uid && x.followee === id);
       if (!f) {
-        f = { follower: uid, followee: id, status: prof(id).is_private ? "pending" : "accepted", created_at: iso(Date.now()) };
+        if (!prof(id)) throw new Error("That member could not be found");
+        f = { follower: uid, followee: id, created_at: iso(Date.now()) };
         w.follows.push(f);
-        notify(id, uid, f.status === "pending" ? "follow_request" : "follow");
-        if (isDemo(id) && !isDemo(uid)) {
-          if (f.status === "pending") {
-            later(5000, () => {
-              const g = w.follows.find((x) => x.follower === uid && x.followee === id);
-              if (g && g.status === "pending") { g.status = "accepted"; notify(uid, id, "follow_accepted"); }
-            });
-          } else if (Math.random() < 0.7) {
-            later(3500, () => {
-              if (w.users[uid] && !w.follows.some((x) => x.follower === id && x.followee === uid)) {
-                w.follows.push({ follower: id, followee: uid, status: prof(uid).is_private ? "pending" : "accepted", created_at: iso(Date.now()) });
-                notify(uid, id, prof(uid).is_private ? "follow_request" : "follow");
-              }
-            });
-          }
+        notify(id, uid, "follow");
+        if (isDemo(id) && !isDemo(uid) && Math.random() < 0.7) {
+          later(3500, () => {
+            if (w.users[uid] && !w.follows.some((x) => x.follower === id && x.followee === uid)) {
+              w.follows.push({ follower: id, followee: uid, created_at: iso(Date.now()) });
+              notify(uid, id, "follow");
+            }
+          });
         }
         save();
       }
-      return f.status;
+      return "accepted";
     },
     async unfollow(id) { w.follows = w.follows.filter((x) => !(x.follower === uid && x.followee === id)); save(); },
     async removeFollower(id) { w.follows = w.follows.filter((x) => !(x.follower === id && x.followee === uid)); save(); },
-    async approveFollower(id) {
-      const f = w.follows.find((x) => x.follower === id && x.followee === uid);
-      if (f && f.status === "pending") {
-        f.status = "accepted";
-        w.notifications = w.notifications.filter((n) => !(n.user_id === uid && n.actor_id === id && n.kind === "follow_request"));
-        notify(id, uid, "follow_accepted");
-        save();
-      }
-    },
     async getFollows(userId) {
-      const row = (id, f) => ({ id, status: f.status, created_at: f.created_at, profile: clone(prof(id)) });
+      const row = (id, f) => ({ id, created_at: f.created_at, profile: clone(prof(id)) });
       return {
         following: w.follows.filter((f) => f.follower === userId && prof(f.followee)).map((f) => row(f.followee, f)),
         followers: w.follows.filter((f) => f.followee === userId && prof(f.follower)).map((f) => row(f.follower, f)),
@@ -350,7 +348,7 @@ export async function createDemoApi() {
       w.activities.push(act);
       save();
       if (!isDemo(uid) && act.kind === "ranked") {
-        const fans = w.follows.filter((f) => f.followee === uid && f.status === "accepted" && isDemo(f.follower)).map((f) => f.follower);
+        const fans = w.follows.filter((f) => f.followee === uid && isDemo(f.follower)).map((f) => f.follower);
         const pool = fans.length ? fans : demoIds().slice(0, 3);
         const who = pool.sort(() => Math.random() - 0.5).slice(0, Math.min(2, pool.length));
         who.forEach((u, k) => later(4000 + k * 3000, () => {
@@ -374,6 +372,7 @@ export async function createDemoApi() {
         .map(enrich);
     },
     async deleteActivity(id) {
+      id = num(id);
       const a = w.activities.find((x) => x.id === id);
       if (!a || a.user_id !== uid) return;
       w.activities = w.activities.filter((x) => x.id !== id);
@@ -384,18 +383,21 @@ export async function createDemoApi() {
     },
     async like(id) {
       requireUser();
+      id = num(id);
       const a = w.activities.find((x) => x.id === id);
       if (!a || !canView(a.user_id) || w.likes.some((l) => l.activity_id === id && l.user_id === uid)) return;
       w.likes.push({ activity_id: id, user_id: uid, created_at: iso(Date.now()) });
       notify(a.user_id, uid, "like", { activity_id: id, film_id: a.film_id });
       save();
     },
-    async unlike(id) { w.likes = w.likes.filter((l) => !(l.activity_id === id && l.user_id === uid)); save(); },
+    async unlike(id) { id = num(id); w.likes = w.likes.filter((l) => !(l.activity_id === id && l.user_id === uid)); save(); },
     async getComments(activityId) {
+      activityId = num(activityId);
       return w.comments.filter((c) => c.activity_id === activityId).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((c) => ({ ...clone(c), profile: clone(prof(c.user_id)) }));
     },
     async addComment(activityId, body) {
       requireUser();
+      activityId = num(activityId);
       const a = w.activities.find((x) => x.id === activityId);
       if (!a || !canView(a.user_id)) throw new Error("That post is no longer available");
       const c = { id: w.seq++, activity_id: activityId, user_id: uid, body: body.slice(0, 500), created_at: iso(Date.now()) };
@@ -405,6 +407,7 @@ export async function createDemoApi() {
       return { ...clone(c), profile: clone(prof(uid)) };
     },
     async deleteComment(id) {
+      id = num(id);
       const c = w.comments.find((x) => x.id === id);
       const a = c && w.activities.find((x) => x.id === c.activity_id);
       if (c && (c.user_id === uid || a?.user_id === uid)) { w.comments = w.comments.filter((x) => x.id !== id); save(); }
@@ -425,7 +428,7 @@ export async function createDemoApi() {
     async getRecsForMe() {
       return w.recs.filter((x) => x.to_user === uid).sort((a, b) => b.created_at.localeCompare(a.created_at)).map((x) => ({ ...clone(x), profile: clone(prof(x.from_user)) }));
     },
-    async deleteRec(id) { w.recs = w.recs.filter((x) => !(x.id === id && (x.to_user === uid || x.from_user === uid))); save(); },
+    async deleteRec(id) { id = num(id); w.recs = w.recs.filter((x) => !(x.id === id && (x.to_user === uid || x.from_user === uid))); save(); },
 
     async filmStats(ids) {
       const set = new Set(ids);
@@ -457,7 +460,6 @@ export async function createDemoApi() {
       w.backlog[uid] = list.filter((r) => r.film_id !== id);
       save();
     },
-    backlogLocal: false,
     async matchTitles() { return null; },
 
     resetDemo() { localStorage.removeItem(KEY); localStorage.removeItem(SESSION); },

@@ -15,14 +15,23 @@ let authTab = "signup";
 // Google's multicolor "G", as Google's sign-in branding guidelines ask for on Google sign-in buttons.
 const GOOGLE_G = `<svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>`;
 
-export async function signInWithGoogle(btn) {
+// After any successful sign-in: load the member's data and go to onboarding or the feed.
+async function enterApp() {
+  await loadSession();
+  if (!S.me) throw new Error("Couldn't load your profile. Try again.");
+  document.dispatchEvent(new CustomEvent("movi:auth"));
+  location.hash = needsOnboarding() && rankedCount() === 0 && !S.backlog.length ? "#/onboarding" : "#/feed";
+}
+
+// Not async, and nothing runs before api.signInWithGoogle(): browsers only open the Google
+// sign-in window when it is requested directly by the click.
+export function signInWithGoogle(btn) {
+  const pending = api.signInWithGoogle();
   btn.disabled = true;
-  try {
-    await api.signInWithGoogle();
-  } catch (e) {
-    btn.disabled = false;
-    toast(e.message);
-  }
+  return pending
+    .then((user) => (user ? enterApp() : null)) // null: they closed the window
+    .catch((e) => toast(e.message))
+    .finally(() => { btn.disabled = false; });
 }
 
 export function renderWelcome(view) {
@@ -59,8 +68,9 @@ export function renderWelcome(view) {
           <p class="form-err" id="auth-err" role="alert"></p>
           <button class="btn primary block" id="auth-go">Sign in</button>
           ${demo ? "" : `<button type="button" class="linkish center-t" data-act="forgot">Forgot password?</button>`}
+          ${demo ? "" : `<p class="muted small center-t">Use one of our other apps? Sign in the same way and you keep your username.</p>`}
         </form>`}
-        ${demo ? `<div class="demo-note">${ICON.lock}<span><b>Demo mode.</b> Accounts and rankings are saved only in this browser, alongside a sample community. Connect Supabase in <code>config.js</code> to go live.</span></div>` : ""}
+        ${demo ? `<div class="demo-note">${ICON.lock}<span><b>Demo mode.</b> Accounts and rankings are saved only in this browser, alongside a sample community.</span></div>` : ""}
         <a class="linkish center-t" href="#/discover">Browse without an account</a>
         <p class="legal">By continuing, you agree to Movi's <a href="terms.html">Terms of service</a> and <a href="privacy.html">Privacy policy</a>.</p>
       </div>
@@ -81,9 +91,12 @@ export function renderWelcome(view) {
     const hint = $("#u-hint");
     if (!hint || !u.value) return;
     if (!/^[a-z0-9_.]{3,20}$/.test(u.value)) { hint.textContent = "3–20 characters: lowercase letters, numbers, _ and ."; hint.className = "hint"; return; }
-    const ok = await api.usernameAvailable(u.value).catch(() => true);
-    hint.textContent = ok ? `@${u.value} is available` : `@${u.value} is taken`;
-    hint.className = ok ? "hint good" : "hint bad";
+    const name = u.value;
+    const ok = await api.usernameAvailable(name).catch(() => null);
+    if (u.value !== name) return;
+    // null: it can't be checked before you have an account; it's checked when you create it.
+    hint.textContent = ok == null ? "3–20 characters: lowercase letters, numbers, _ and ." : ok ? `@${name} is available` : `@${name} is taken`;
+    hint.className = ok == null ? "hint" : ok ? "hint good" : "hint bad";
   }, 300);
 
   form.addEventListener("submit", async (e) => {
@@ -101,19 +114,12 @@ export function renderWelcome(view) {
     btn.textContent = authTab === "signup" ? "Creating account…" : "Signing in…";
     try {
       if (authTab === "signup") {
-        if (!(await api.usernameAvailable(fd.username))) throw new Error("That username is taken");
-        const res = await api.signUp({ email: fd.email, password: fd.password, username: fd.username, displayName: fd.display_name.trim() });
-        if (res.needsConfirm) {
-          view.querySelector(".auth").innerHTML = `<h2>Check your email</h2><p class="muted">We sent a confirmation link to <b>${esc(fd.email)}</b>. Open it to finish creating your account, then sign in.</p><button class="btn block" data-atab-reset>Back to sign in</button>`;
-          view.querySelector("[data-atab-reset]").addEventListener("click", () => { authTab = "signin"; renderWelcome(view); });
-          return;
-        }
+        if ((await api.usernameAvailable(fd.username)) === false) throw new Error("That username is taken");
+        await api.signUp({ email: fd.email, password: fd.password, username: fd.username, displayName: fd.display_name.trim() });
       } else {
         await api.signIn({ email: fd.email, password: fd.password });
       }
-      await loadSession();
-      document.dispatchEvent(new CustomEvent("movi:auth"));
-      location.hash = needsOnboarding() && rankedCount() === 0 ? "#/onboarding" : "#/feed";
+      await enterApp();
     } catch (ex) {
       err.textContent = ex.message;
       btn.disabled = false;
@@ -127,7 +133,7 @@ export async function forgotPassword() {
   if (!email) return;
   try {
     await api.resetPassword(email);
-    toast("Check your email for a reset link");
+    toast("If that email has an account, a reset link is on its way");
   } catch (e) { toast(e.message); }
 }
 
@@ -178,15 +184,15 @@ export function renderSettings(view) {
       <label>Username<span class="field"><span class="at">@</span><input name="username" maxlength="20" value="${esc(me.username)}" pattern="[a-z0-9_.]{3,20}" required></span></label>
       <label>Bio<textarea name="bio" maxlength="160" rows="2" placeholder="What do you love to watch?">${esc(me.bio)}</textarea></label>
       <label>${new Date().getFullYear()} goal<span class="field"><input name="yearly_goal" type="number" min="1" max="1000" value="${me.yearly_goal}"><span class="at">films</span></span></label>
-      <label class="switch"><input type="checkbox" name="is_private" ${me.is_private ? "checked" : ""}><span><b>Private account</b><small>Only approved followers see your rankings, watchlist and activity.</small></span></label>
+      <p class="muted small">Your profile, rankings, watchlist and activity are visible to other signed-in members.${demo ? "" : " Your username is shared with our other apps that use the same sign-in."}</p>
       <p class="form-err" id="prof-err" role="alert"></p>
       <button class="btn primary">Save profile</button>
     </form>
-    <form class="panel-card form" id="pw-form">
+    ${api.canChangePassword ? `<form class="panel-card form" id="pw-form">
       <h3>Password</h3>
       <label>New password<input name="password" type="password" minlength="6" autocomplete="new-password" required></label>
       <button class="btn">Update password</button>
-    </form>
+    </form>` : demo ? "" : `<div class="panel-card form"><h3>Password</h3><p class="muted">You sign in with Google, so there's no Movi password to change.</p></div>`}
     <div class="panel-card form">
       <h3>Your data</h3>
       <p class="muted">Download everything you've ranked, noted and saved.</p>
@@ -196,10 +202,10 @@ export function renderSettings(view) {
     <div class="panel-card form">
       <h3>Account</h3>
       <p class="muted">${demo ? "Demo mode: this account lives only in this browser." : "Signed in to Movi."}</p>
-      <div class="settings"><button class="btn sm" data-act="sign-out">${ICON.logout} Sign out</button><button class="btn sm danger" data-act="delete-account">${ICON.trash} Delete account</button>
+      <div class="settings"><button class="btn sm" data-act="sign-out">${ICON.logout} Sign out</button><button class="btn sm danger" data-act="delete-account">${ICON.trash} Delete my Movi data</button>
       ${demo ? `<button class="btn sm ghost" data-act="reset-demo">Reset demo data</button>` : ""}</div>
     </div>
-    <p class="muted small center-t">Film data from Wikipedia (CC BY-SA). Posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB. ${demo ? "Running in demo mode." : "Connected to Supabase."}</p>`;
+    <p class="muted small center-t">Film data from Wikipedia (CC BY-SA). Posters from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB. ${demo ? "Running in demo mode." : ""}</p>`;
   const pf = $("#prof-form");
   pf.avatar_hue.addEventListener("input", () => { $("#av-prev").innerHTML = avatarHTML({ ...me, display_name: pf.display_name.value, avatar_hue: Number(pf.avatar_hue.value) }, 72); });
   pf.username.addEventListener("input", () => { pf.username.value = pf.username.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""); });
@@ -213,22 +219,25 @@ export function renderSettings(view) {
       username: String(fd.get("username")).trim(),
       bio: String(fd.get("bio")).trim().slice(0, 160),
       avatar_hue: Number(fd.get("avatar_hue")),
-      yearly_goal: Math.max(1, Math.min(1000, Number(fd.get("yearly_goal")) || 52)),
-      is_private: fd.get("is_private") === "on",
+      yearly_goal: Math.max(1, Math.min(1000, Math.trunc(Number(fd.get("yearly_goal"))) || 52)),
     };
     if (!patch.display_name) return (err.textContent = "Name can't be empty");
     if (!/^[a-z0-9_.]{3,20}$/.test(patch.username)) return (err.textContent = "Username needs 3–20 lowercase letters, numbers, _ or .");
     try {
-      if (patch.username !== me.username && !(await api.usernameAvailable(patch.username))) throw new Error("That username is taken");
+      const renamed = patch.username !== S.me.username;
+      if (renamed && (await api.usernameAvailable(patch.username)) === false) throw new Error("That username is taken");
       await updateMe(patch);
       document.dispatchEvent(new CustomEvent("movi:auth"));
       toast("Profile saved");
+      // The settings address stays the same, but links to your profile change with the username.
+      if (renamed) renderSettings(view);
     } catch (ex) {
-      err.textContent = /duplicate|unique/i.test(ex.message) ? "That username is taken" : ex.message;
+      err.textContent = ex.message;
     }
   });
-  $("#pw-form").addEventListener("submit", async (e) => {
+  $("#pw-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (e.target.password.value.length < 6) return toast("Password should be at least 6 characters");
     try {
       await api.updatePassword(e.target.password.value);
       e.target.reset();
@@ -252,11 +261,15 @@ export function exportData() {
 }
 
 export async function deleteAccount() {
-  const ok = await confirmDialog({ title: "Delete your account?", text: "This permanently deletes your profile, rankings, notes, watchlist, follows and activity. This can't be undone.", ok: "Delete forever", danger: true });
+  const ok = await confirmDialog({
+    title: "Delete your Movi data?",
+    text: "This permanently deletes your Movi profile, rankings, notes, lists, follows, posts, likes and comments." + (api.mode === "demo" ? "" : " If you don't use this sign-in for any of our other apps, the sign-in and username are deleted too.") + " This can't be undone.",
+    ok: "Delete forever", danger: true,
+  });
   if (!ok) return;
   try {
     await api.deleteAccount();
-    toast("Account deleted");
+    toast("Your Movi data was deleted");
     document.dispatchEvent(new CustomEvent("movi:signedout"));
   } catch (e) { toast(e.message); }
 }

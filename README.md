@@ -5,7 +5,7 @@ Beli for movies. Rank every film you've seen by picking which one you liked more
 The app lives in [`docs/`](docs/). It's plain HTML, CSS and JavaScript modules with no build step, plus a database of **36,115 films**. It runs in two modes:
 
 - **Demo mode** (the default). Everything is saved in your browser, alongside a small made-up community of sample members so the social features have something to show. No server needed.
-- **Live mode.** Real accounts and real friends, backed by [Supabase](https://supabase.com). You turn it on by pasting two values into `docs/config.js`; the steps are below.
+- **Live mode.** Real accounts and real friends, backed by Google Firebase. You turn it on by pasting two public values into `docs/config.js`; see [Backend](#backend).
 
 ## Features
 
@@ -14,7 +14,7 @@ The app lives in [`docs/`](docs/). It's plain HTML, CSS and JavaScript modules w
 - **Scores build themselves** from a film's position in your list. Loved films score 6.8–10, fine ones 3.4–6.7, and films you didn't like 0–3.3.
 - **Watch details on every film:** date watched, where (Theater, Streaming, Home, TV, Plane), who you watched it with, a rewatch flag and notes.
 - **Re-rank or remove** any film. A quick-add search lets you rank from anywhere (the red **+**).
-- **To rank:** paste every movie you've watched in rough form ("karate kid, star wars 1, harry potter"). Movi matches each line to a film, offers to add a whole series, and saves them to rank later, one at a time or all in a row. With the AI function set up (below), Claude handles nicknames and numbering like "star wars 5" → *The Empire Strikes Back*.
+- **To rank:** paste every movie you've watched in rough form ("karate kid, star wars 1, harry potter"). Movi matches each line to a film, offers to add a whole series, and saves them to rank later, one at a time or all in a row. In live mode, Claude handles nicknames and numbering like "star wars 5" → *The Empire Strikes Back*.
 
 **Lists**
 - **Been**, your ranked list. Filter by Loved / Fine / Didn't like, genre, decade and year watched. Sort by rank, recently ranked, recently watched, release year or title, or search within the list.
@@ -25,8 +25,8 @@ The app lives in [`docs/`](docs/). It's plain HTML, CSS and JavaScript modules w
 
 **Social**
 - **Feed** of what the people you follow rank and save, with likes, comments, and one-tap save to your watchlist. Following and Everyone tabs.
-- **Follow people**, including **private accounts** that approve each follow request.
-- **Notifications** for new followers, follow requests, likes, comments and recommendations.
+- **Follow people.** Follows are immediate; every account is visible to signed-in members.
+- **Notifications** for new followers, likes, comments and recommendations.
 - **Recommend** a film to friends.
 - **Leaderboard** of who has ranked the most films, among friends or across everyone.
 - **Find people**, ranked by how many films you have in common, plus an invite link.
@@ -44,8 +44,8 @@ The app lives in [`docs/`](docs/). It's plain HTML, CSS and JavaScript modules w
 - **Search** 36k films by title or year with genre and decade filters, and search people.
 
 **Account**
-- Sign up with email or **Continue with Google**, password reset (live mode), and onboarding: rank 3 films (or paste a list), then follow people.
-- Settings for name, username, bio, avatar color, private account and yearly goal. Change your password, export your data, or delete your account.
+- Sign up with email or **Continue with Google** (live mode), password reset by email (live mode), and onboarding: rank 3 films (or paste a list), then follow people.
+- Settings for name, username, bio, avatar color and yearly goal. Change your password, export your data, or delete your Movi data.
 
 ## Run it locally
 
@@ -57,45 +57,31 @@ python3 -m http.server 8000
 
 It opens in demo mode. Create an account and start ranking.
 
-## Go live with Supabase (about 10 minutes)
+## Backend
 
-1. **Create a project** at [supabase.com](https://supabase.com). The free tier is fine.
-2. **Create the database.** In the dashboard, open **SQL Editor → New query**, paste the whole of [`supabase/migrations/20261106000000_movi.sql`](supabase/migrations/20261106000000_movi.sql), and click **Run**. This creates the tables, the security rules that decide who can see and change what, and the notification triggers.
-   - If you prefer the CLI: `npx supabase link --project-ref <your-ref>` then `npx supabase db push`.
-3. **Connect the app.** In **Project Settings → API**, copy the **Project URL** and the **anon public** key into [`docs/config.js`](docs/config.js):
-   ```js
-   window.MOVI_CONFIG = {
-     supabaseUrl: "https://YOUR-PROJECT.supabase.co",
-     supabaseAnonKey: "eyJ...",
-   };
-   ```
-   Both values are safe to publish. The database's security rules protect the data, not the key.
-4. **Set up email links.** In **Authentication → URL Configuration**, set **Site URL** to wherever the app is hosted, for example `https://ngcoding10.github.io/claude/`. Add the same address under **Redirect URLs**. This makes sign-up confirmation and password-reset emails link back to your site.
-   - Supabase asks new users to confirm their email by default. To let people in right away while testing, turn off **Authentication → Providers → Email → Confirm email**.
-5. **Run the second database update.** In the SQL Editor, run [`supabase/migrations/20261118000000_to_rank.sql`](supabase/migrations/20261118000000_to_rank.sql) the same way. It adds the To rank list and uses Google names for Google accounts. Until it's run, To rank lists are saved on each device only.
-6. Reload the app. The "Demo mode" note disappears and accounts are now real.
+Live mode runs on a Firebase project that Movi shares with the owner's other apps. Everything on the server side lives in **[github.com/ngcoding10/backend-combination](https://github.com/ngcoding10/backend-combination)**: the Firestore security rules and indexes, the Cloud Functions (notifications, like and comment counts, hourly film averages, AI title matching, deleting your data), their tests, and the data model (`docs/DATA-MODEL.md`). This repo is only the website and its public config.
 
-## Sign in with Google (about 10 minutes)
+To go live, paste two public values from the Firebase console into [`docs/config.js`](docs/config.js):
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com), create a project (any name, e.g. "Movi"), then open **APIs & Services → OAuth consent screen**. Choose **External**, fill in the app name (Movi), your email as support and developer contact, and save. Add yourself under **Test users** while it's in testing, or click **Publish app** so anyone can sign in.
-2. Open **APIs & Services → Credentials → Create credentials → OAuth client ID**. Application type: **Web application**.
-   - **Authorized JavaScript origins:** `https://ngcoding10.github.io`
-   - **Authorized redirect URIs:** `https://plnqlxyzqxnhnxgdooiq.supabase.co/auth/v1/callback` (your Supabase project URL plus `/auth/v1/callback`; Supabase shows the exact value on its Google provider page).
-   - Click **Create** and copy the **Client ID** and **Client secret**.
-3. In Supabase, open **Authentication → Sign In / Providers → Google**, turn it on, paste the Client ID and Client secret, and save.
-4. Make sure **Authentication → URL Configuration** lists your site under **Redirect URLs** (step 4 above).
+```js
+window.MOVI_CONFIG = {
+  firebase: { apiKey: "...", authDomain: "...", projectId: "...", appId: "..." }, // Project settings → Your apps → Web app
+  appCheckSiteKey: "...",                                                      // App Check → reCAPTCHA Enterprise site key
+};
+```
 
-The **Continue with Google** button appears on the sign-in page once the app is connected to Supabase. New Google accounts get their Google name and go through the same onboarding.
+Both are safe to publish: the security rules protect the data, not these values. Leave `firebase` as `null` and the site stays in demo mode. Sign-in methods (Google, email + password), the allowed website addresses and the AI key are set up in the backend repo and the Firebase console, not here.
 
-## AI title matching for To rank (about 5 minutes)
+How live mode behaves:
 
-To rank works without this, using built-in matching that handles typos, numbers ("toy story 3", "rocky iv"), "part 2" and whole series. The AI step adds nicknames and franchise numbering ("lotr 2", "star wars 5").
+- **One account across the owner's apps.** Sign-in and username are shared; signing in to Movi with an account from another app keeps the username. "Delete my Movi data" removes only Movi's data, and the sign-in itself only if no other app is in use.
+- **Every account is visible to signed-in members.** There are no private accounts or follow requests; guests can browse films but not profiles.
+- **Scores are never stored.** A person's whole ranking is one document of film ids, best first; scores come from position (`scoreFor` in `js/model.js`, the same formula the backend uses).
+- **Site-wide averages and "Top rated on Movi" are rebuilt hourly**, so they can be up to an hour behind.
+- **People search matches the start** of a username or name.
+- **AI title matching** for To rank has a daily limit per person; past it, the built-in matching is used.
 
-1. Get an API key at [console.anthropic.com](https://console.anthropic.com) (**API Keys → Create Key**). Matching uses Claude Opus 5.5 at low effort; a list of 50 titles is one short request.
-2. In Supabase, open **Edge Functions → Secrets** and add `ANTHROPIC_API_KEY` with that key.
-3. Open **Edge Functions → Deploy a new function → Via Editor**, name it `match-films`, replace the example code with [`supabase/functions/match-films/index.ts`](supabase/functions/match-films/index.ts), and click **Deploy**. (CLI alternative: `npx supabase functions deploy match-films`.)
-
-The key stays on Supabase's servers and never reaches the website. Only signed-in members can call the function, and each request is capped at 80 titles. When the function is live, matched lists show a "Matched with AI" tag.
+`docs/js/core.js` is the shared Firebase module, copied unchanged from `web/core.js` in the backend repo. Don't edit it here: change it there and copy it again.
 
 ## Publish with GitHub Pages
 
@@ -107,28 +93,27 @@ Speed: the first screen needs about 0.5 MB of film data (compressed); posters fo
 
 ```
 docs/
-  index.html, styles.css, config.js
+  index.html, styles.css
+  config.js           the public Firebase settings (null = demo mode)
   data/               film database (index.json + 73 detail files, loaded on demand)
   js/app.js           router, header and tab bar, button handling
   js/state.js         the signed-in user's data and the actions that change it
   js/model.js         scoring, taste match, rec score, streaks, goals, badges
   js/films.js         film database loading and search
   js/rank-flow.js     the ranking flow, "rank all" queue and quick-add search
-  js/matcher.js       turns typed movie lists into films (local matching + optional AI)
+  js/matcher.js       turns typed movie lists into films (local matching + AI in live mode)
   js/variety.js       keeps suggestion rows fresh between visits
   js/film-sheet.js    film page, watch details, recommend, share
   js/views/           feed, discover/search, lists, profile, social, account
+  js/core.js          shared Firebase module (sign-in, shared username, Firestore, functions); copied unchanged from the backend repo
+  js/api/index.js     picks the data layer and documents the contract both follow
   js/api/demo.js      demo data layer (browser storage + sample community)
-  js/api/supabase.js  live data layer (same functions, backed by Supabase)
-supabase/
-  migrations/         database schema, security rules, functions, triggers (run in order)
-  functions/          match-films Edge Function (Claude-powered title matching)
-  config.toml         config for running Supabase locally (npx supabase start)
-tests/                browser tests (demo + live) and database rule checks
+  js/api/firebase.js  live data layer (same functions, backed by Firebase)
+tests/                browser tests (demo mode, and live mode against the Firebase emulators)
 tools/                film database build script
 ```
 
-Scores are computed the same way in `model.js` and in the database function `movi_score`, so leaderboards and averages always agree with what users see.
+The views only ever talk to `js/api/`; nothing else knows which backend is in use. Rules, indexes and Cloud Functions are in the [backend repo](https://github.com/ngcoding10/backend-combination).
 
 ## Tests
 
@@ -137,11 +122,10 @@ cd docs && python3 -m http.server 8765        # in one terminal
 cd tests && npm install
 npm run e2e:demo                              # full demo-mode walkthrough in a browser
 npm run e2e:torank                            # To rank: paste a list, review, add a series, rank the queue
-SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run schema    # 33 checks of the database rules
-SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run e2e:live  # two users interacting on a live backend
+npm run e2e:live                              # two people using live mode against the Firebase emulators
 ```
 
-Point the live tests at a local stack (`npx supabase start`) or a throwaway project, because they create test accounts.
+`e2e:live` needs the emulators from the backend repo running (Auth 9099, Firestore 8080, Functions 5001). It opens the site as `http://localhost:8765/?emulator`, which is what points it at the emulators; that switch only works on localhost. Nothing in these tests touches a real project.
 
 ## The film database
 

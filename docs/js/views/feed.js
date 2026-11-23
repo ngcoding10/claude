@@ -81,7 +81,7 @@ export function postHTML(a) {
   const saveBtn = S.me && !mine && !myS
     ? `<button class="pbtn ${isWatch(f.id) ? "on" : ""}" data-act="${isWatch(f.id) ? "unwatch" : "watch"}" data-id="${f.id}" aria-label="Watchlist">${ICON.bookmark}<span>${isWatch(f.id) ? "Saved" : "Save"}</span></button>`
     : myS && !mine ? `<span class="pmine">You: ${scoreHTML(myS.score)}</span>` : "";
-  return `<article class="post" data-post="${a.id}">
+  return `<article class="post" data-post="${esc(a.id)}">
     <header>${avatarHTML(p, 42)}<div class="pwho">${nameHTML(p)} ${demoTag(p)}<span class="pverb">${verb}</span>${meta}</div>
       <span class="ptime">${timeAgo(a.created_at)}</span></header>
     <div class="pbody">
@@ -89,17 +89,17 @@ export function postHTML(a) {
       <div class="ptext">${a.kind === "ranked" ? `<div class="pscore">${scoreHTML(a.score, "lg")}</div>` : ""}${a.note ? `<p>“${esc(a.note)}”</p>` : ""}</div>
     </div>
     <footer>
-      <button class="pbtn like ${a.liked ? "on" : ""}" data-act="like" data-id="${a.id}" aria-pressed="${a.liked}" aria-label="Like (${a.likes || 0})" ${S.me ? "" : "disabled"}>${ICON.heart}<span>${a.likes || ""}</span></button>
-      <button class="pbtn" data-act="comments" data-id="${a.id}" aria-label="Comments (${a.comments || 0})">${ICON.comment}<span>${a.comments || ""}</span></button>
+      <button class="pbtn like ${a.liked ? "on" : ""}" data-act="like" data-id="${esc(a.id)}" aria-pressed="${a.liked}" aria-label="Like (${a.likes || 0})" ${S.me ? "" : "disabled"}>${ICON.heart}<span>${a.likes || ""}</span></button>
+      <button class="pbtn" data-act="comments" data-id="${esc(a.id)}" aria-label="Comments (${a.comments || 0})">${ICON.comment}<span>${a.comments || ""}</span></button>
       ${saveBtn}
-      ${mine ? `<button class="pbtn end" data-act="delete-post" data-id="${a.id}" aria-label="Delete post">${ICON.trash}</button>` : ""}
+      ${mine ? `<button class="pbtn end" data-act="delete-post" data-id="${esc(a.id)}" aria-label="Delete post">${ICON.trash}</button>` : ""}
     </footer>
     <div class="cmts" hidden></div>
   </article>`;
 }
 
 export async function toggleLike(btn) {
-  const id = Number(btn.dataset.id);
+  const id = btn.dataset.id;
   const on = !btn.classList.contains("on");
   const span = btn.querySelector("span");
   const n = Number(span.textContent || 0) + (on ? 1 : -1);
@@ -124,11 +124,11 @@ export async function toggleComments(btn) {
 }
 
 async function drawComments(post) {
-  const id = Number(post.dataset.post);
+  const id = post.dataset.post;
   const box = post.querySelector(".cmts");
   const list = await api.getComments(id);
   const owner = post.querySelector(".delete-post, [data-act=delete-post]") !== null;
-  box.innerHTML = list.map((c) => `<div class="cmt">${avatarHTML(c.profile, 28)}<div><b>${c.profile ? nameHTML(c.profile) : "Someone"}</b> ${esc(c.body)}<small>${timeAgo(c.created_at)}${c.user_id === S.me?.id || owner ? ` · <button class="linkish" data-act="del-comment" data-id="${c.id}">Delete</button>` : ""}</small></div></div>`).join("")
+  box.innerHTML = list.map((c) => `<div class="cmt">${avatarHTML(c.profile, 28)}<div><b>${c.profile ? nameHTML(c.profile) : "Someone"}</b> ${esc(c.body)}<small>${timeAgo(c.created_at)}${c.user_id === S.me?.id || owner ? ` · <button class="linkish" data-act="del-comment" data-id="${esc(c.id)}">Delete</button>` : ""}</small></div></div>`).join("")
     + (S.me ? `<form class="cmt-form"><input name="body" maxlength="500" aria-label="Add a comment" placeholder="Add a comment…" autocomplete="off" required><button class="btn sm primary">Post</button></form>` : `<p class="muted">Sign in to comment.</p>`);
   const form = box.querySelector("form");
   form?.addEventListener("submit", async (e) => {
@@ -151,7 +151,7 @@ async function drawComments(post) {
 
 export async function deleteComment(btn) {
   const post = btn.closest(".post");
-  await api.deleteComment(Number(btn.dataset.id));
+  await api.deleteComment(btn.dataset.id);
   const counter = post.querySelector('[data-act="comments"] span');
   counter.textContent = Math.max(0, Number(counter.textContent || 0) - 1) || "";
   await drawComments(post);
@@ -160,7 +160,7 @@ export async function deleteComment(btn) {
 async function loadSuggestions() {
   const box = $("#suggest");
   if (!box) return;
-  const exclude = new Set([S.me.id, ...S.following.keys()]);
+  const exclude = new Set([S.me.id, ...S.following]);
   const ps = (await api.listProfiles({ limit: 40 })).filter((p) => !exclude.has(p.id)).slice(0, 5);
   box.innerHTML = `<h3>People to follow</h3>${ps.length ? ps.map((p) => userRowHTML(p, followBtnHTML(p), `${p.ranked_count} ranked`)).join("") : `<p class="muted">You're following everyone. Invite friends to Movi!</p>`}
     <a class="link" href="#/people">See all</a>`;
@@ -168,9 +168,7 @@ async function loadSuggestions() {
 
 export function followBtnHTML(p, size = "sm") {
   if (!S.me || p.id === S.me.id) return "";
-  const st = S.following.get(p.id);
-  if (st === "accepted") return `<button class="btn ${size}" data-act="unfollow" data-uid="${p.id}">Following</button>`;
-  if (st === "pending") return `<button class="btn ${size}" data-act="unfollow" data-uid="${p.id}">Requested</button>`;
-  return `<button class="btn ${size} primary" data-act="follow" data-uid="${p.id}">Follow</button>`;
+  if (S.following.has(p.id)) return `<button class="btn ${size}" data-act="unfollow" data-uid="${esc(p.id)}">Following</button>`;
+  return `<button class="btn ${size} primary" data-act="follow" data-uid="${esc(p.id)}">Follow</button>`;
 }
 

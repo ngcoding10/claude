@@ -8,7 +8,8 @@ export const BUCKETS = {
 };
 export const ORDER = ["loved", "fine", "disliked"];
 
-// Keep in sync with public.movi_score() in supabase/migrations.
+// The backend works out site-wide averages with this same formula (scoreFor in functions/src/movi-stats.js
+// of the backend repo). Change one and you must change the other.
 export function scoreFor(bucket, i, n) {
   const { lo, hi } = BUCKETS[bucket];
   const s = n <= 1 ? lo + (hi - lo) * 0.75 : hi - (hi - lo) * (i / (n - 1));

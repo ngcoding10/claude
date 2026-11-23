@@ -1,6 +1,7 @@
 // Turns a typed list of watched movies ("karate kid, star wars 1, harry potter") into films.
-// A local matcher always runs; when the match-films Edge Function is set up, Claude resolves
+// A local matcher always runs; in live mode the moviMatchFilms Cloud Function asks Claude to resolve
 // nicknames, numbering and franchises, and its answers are mapped back onto the local database.
+// If the function is unavailable (or the daily limit is reached) the local answers are used as they are.
 import { allFilms } from "./films.js";
 import { api } from "./api/index.js";
 import { norm } from "./util.js";

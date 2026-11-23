@@ -1,7 +1,7 @@
 import { $, esc, ICON, toast } from "./util.js";
 import { loadFilms, film, isFilmId } from "./films.js";
 import { initApi, api } from "./api/index.js";
-import { S, rankedIds, removeBacklog, updateMe, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
+import { S, rankedIds, removeBacklog, loadSession, clearSession, signedIn, addWatch, removeWatch, skipFilm, removeRanking, follow, unfollow, removeFollower, refreshUnread } from "./state.js";
 import { fillMissingPosters, avatarHTML, closeModal, modalOpen, confirmDialog, spinnerHTML, emptyHTML, withTransition } from "./ui.js";
 import { openFilm, closeFilm, refreshFilm, refreshFilmPoster, recommendDialog, shareFilm, sheetFilmId } from "./film-sheet.js";
 import { startRank, startQueue, cancelRank, flowActive, flowAction, flowKey, quickAdd, quickPick, requireMe, setFlowDoneHandler } from "./rank-flow.js";
@@ -10,7 +10,7 @@ import { renderFeed, feedMore, toggleLike, toggleComments, deleteComment, follow
 import { renderDiscover, renderSearch, drawResults, moreResults, refreshQuick, shuffleQuick } from "./views/discover.js";
 import { renderLists, shareList } from "./views/lists.js";
 import { renderProfile, showFollows, shareProfile } from "./views/profile.js";
-import { renderLeaderboard, renderNotifications, renderPeople, renderTogether, handleRequest } from "./views/social.js";
+import { renderLeaderboard, renderNotifications, renderPeople, renderTogether } from "./views/social.js";
 import { signInWithGoogle, shuffleOnboarding, renderWelcome, renderOnboarding, onboardingNext, onboardingDone, renderSettings, exportData, deleteAccount, forgotPassword, needsOnboarding } from "./views/account.js";
 
 const view = () => $("#view");
@@ -181,7 +181,10 @@ function swapFollowButtons(uid) {
 }
 
 // ---------------- Actions ----------------
+// Nothing may be awaited on the way to case "google": browsers only open Google's sign-in
+// window when it is requested directly by the click.
 async function act(name, el) {
+  // Film ids are numbers; ids of posts, comments and recs are text and are read where they're used.
   const id = el.dataset.id != null ? Number(el.dataset.id) : null;
   const uid = el.dataset.uid;
   switch (name) {
@@ -219,7 +222,7 @@ async function act(name, el) {
     case "del-comment": return deleteComment(el);
     case "delete-post": {
       if (!(await confirmDialog({ title: "Delete this post?", text: "It's removed from feeds along with its likes and comments. Your ranking stays.", ok: "Delete", danger: true }))) return;
-      await api.deleteActivity(id);
+      await api.deleteActivity(el.dataset.id);
       removeItem(el.closest(".post"));
       return;
     }
@@ -245,16 +248,15 @@ async function act(name, el) {
       if (!requireMe()) return;
       el.disabled = true;
       try {
-        const st = await follow(uid);
-        toast(st === "pending" ? "Follow request sent" : "Following");
+        await follow(uid);
+        toast("Following");
       } catch (e) { toast(e.message); }
       swapFollowButtons(uid);
       if (current?.name === "u") rerender();
       return;
     }
     case "unfollow": {
-      const st = S.following.get(uid);
-      if (st === "accepted" && !(await confirmDialog({ title: "Unfollow?", text: "Their activity leaves your feed and rec scores.", ok: "Unfollow" }))) return;
+      if (S.following.has(uid) && !(await confirmDialog({ title: "Unfollow?", text: "Their activity leaves your feed and rec scores.", ok: "Unfollow" }))) return;
       try { await unfollow(uid); } catch (e) { toast(e.message); }
       swapFollowButtons(uid);
       if (current?.name === "u") rerender();
@@ -265,14 +267,9 @@ async function act(name, el) {
       removeItem(el.closest(".urow"));
       toast("Follower removed");
       return;
-    case "approve":
-    case "decline":
-      await handleRequest(uid, name === "approve");
-      removeItem(el.closest(".urow"));
-      return;
     case "show-follows": return showFollows(uid, el.dataset.kind);
     case "dismiss-rec":
-      await api.deleteRec(id);
+      await api.deleteRec(el.dataset.id);
       removeItem(el.closest(".rec"));
       return;
     case "ob-shuffle": return shuffleOnboarding();
@@ -341,29 +338,14 @@ async function boot() {
   try {
     await initApi();
   } catch (e) {
-    view().innerHTML = emptyHTML({ title: "Couldn't connect to the server", text: `Check the Supabase settings in config.js. (${esc(e.message)})` });
+    view().innerHTML = emptyHTML({ title: "Couldn't connect to the server", text: `Check your connection and reload. (${esc(e.message)})`, action: `<button class="btn" onclick="location.reload()">Reload</button>` });
     return;
   }
   api.onChange = () => refreshUnread();
-  // A failed Google sign-in comes back as #error=...&error_description=...
-  const authError = new URLSearchParams(location.hash.replace(/^#/, "")).get("error_description");
-  if (authError) {
-    history.replaceState(null, "", location.pathname);
-    toast(/provider is not enabled/i.test(authError) ? "Google sign-in isn't switched on yet" : `Sign-in failed: ${authError.replace(/\+/g, " ")}`);
-  }
   await loadSession().catch(() => clearSession());
-  if (S.me && S.me.display_name === S.me.username) {
-    const meta = await api.userMeta().catch(() => null);
-    const name = (meta?.full_name || meta?.name || "").trim().slice(0, 40);
-    if (name) await updateMe({ display_name: name }).catch(() => {});
-  }
   // New members land on onboarding from the home page only; a link to a specific page is respected.
   const atHome = ["", "#", "#/", "#/feed"].includes(location.hash);
   if (S.me && atHome && needsOnboarding() && S.me.ranked_count === 0 && !S.backlog.length) location.hash = "#/onboarding";
-  if (api.takeRecovery?.() && S.me) {
-    location.hash = "#/settings";
-    toast("Choose a new password below");
-  }
   booted = true;
   await route();
   setInterval(() => { if (document.visibilityState === "visible") refreshUnread(); }, 40000);

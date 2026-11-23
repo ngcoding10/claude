@@ -11,6 +11,10 @@ const PQ = { bucket: "all", genre: "", decade: "", sort: "rank", q: "", year: ""
 
 export async function renderProfile(view, username, tab = "rankings") {
   view.innerHTML = spinnerHTML();
+  if (!S.me && api.membersOnly) {
+    view.innerHTML = emptyHTML({ title: "Sign in to see this profile", text: "Members' profiles and rankings are visible to signed-in members.", action: `<a class="btn primary" href="#/welcome">Join Movi</a>` });
+    return;
+  }
   const p = await api.getProfileByUsername(username);
   if (!p) {
     view.innerHTML = emptyHTML({ title: "No one by that name", text: `There's no member called @${esc(username)}.`, action: `<a class="btn" href="#/search?tab=people">Search people</a>` });
@@ -18,25 +22,22 @@ export async function renderProfile(view, username, tab = "rankings") {
   }
   const own = S.me?.id === p.id;
   const follows = await api.getFollows(p.id);
-  const st = S.me ? follows.followers.find((f) => f.id === S.me.id)?.status || null : null;
   if (S.me && !own) {
-    if (st) S.following.set(p.id, st);
+    // What the server says wins over what this tab remembered.
+    if (follows.followers.some((f) => f.id === S.me.id)) S.following.add(p.id);
     else S.following.delete(p.id);
   }
-  const canSee = own || !p.is_private || st === "accepted";
-  const [rowsRaw, watch, board] = await Promise.all([
-    own ? myRows() : canSee ? api.getRankings(p.id) : [],
-    own ? S.watch : canSee ? api.getWatchlist(p.id) : [],
-    api.listProfiles({ limit: 1000 }).catch(() => []),
+  const [rowsRaw, watch, place] = await Promise.all([
+    own ? myRows() : api.getRankings(p.id),
+    own ? S.watch : api.getWatchlist(p.id),
+    api.placeOf(p).catch(() => 0),
   ]);
   const rows = own ? rowsRaw : rowsWithScores(rowsRaw);
-  const followers = follows.followers.filter((f) => f.status === "accepted");
-  const following = follows.following.filter((f) => f.status === "accepted");
-  const place = board.findIndex((x) => x.id === p.id) + 1;
+  const { followers, following } = follows;
   const match = !own && S.me && rows.length ? tasteMatch(myRows(), rows) : null;
 
   const tabs = [["rankings", `Rankings · ${rows.length}`], ["want", `Watchlist · ${watch.length}`], ["activity", "Activity"], ["taste", "Taste"]];
-  if (!own && S.me && canSee) tabs.push(["compare", "Compare"]);
+  if (!own && S.me) tabs.push(["compare", "Compare"]);
   if (!tabs.some(([k]) => k === tab)) tab = "rankings";
   const base = `#/u/${encodeURIComponent(p.username)}`;
 
@@ -44,13 +45,13 @@ export async function renderProfile(view, username, tab = "rankings") {
     <div class="phead">
       ${avatarHTML(p, 92)}
       <div class="pinfo">
-        <h1>${esc(p.display_name || p.username)} ${p.is_private ? `<span class="lock" title="Private account">${ICON.lock}</span>` : ""}${demoTag(p)}</h1>
+        <h1>${esc(p.display_name || p.username)} ${demoTag(p)}</h1>
         <div class="muted">@${esc(p.username)} · <span class="archetype">${esc(archetype(rows))}</span></div>
         ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
         <div class="pstats">
           <a href="${base}/rankings"><b>${p.ranked_count}</b> ranked</a>
-          <button data-act="show-follows" data-uid="${p.id}" data-kind="followers"><b>${followers.length}</b> followers</button>
-          <button data-act="show-follows" data-uid="${p.id}" data-kind="following"><b>${following.length}</b> following</button>
+          <button data-act="show-follows" data-uid="${esc(p.id)}" data-kind="followers"><b>${followers.length}</b> followers</button>
+          <button data-act="show-follows" data-uid="${esc(p.id)}" data-kind="following"><b>${following.length}</b> following</button>
           ${place ? `<a href="#/leaderboard"><b>#${place}</b> on Movi</a>` : ""}
         </div>
         ${match?.pct != null ? `<div class="match"><b>${match.pct}%</b> taste match <span class="muted">· ${match.common.length} films in common</span></div>` : match ? `<div class="match muted">Rank more of the same films to see your taste match (${match.common.length} in common so far)</div>` : ""}
@@ -60,15 +61,10 @@ export async function renderProfile(view, username, tab = "rankings") {
         <button class="btn sm ghost" data-act="share-profile" data-username="${esc(p.username)}" aria-label="Share profile">${ICON.link} Share</button>
       </div>
     </div>
-    ${own && S.followers.some((f) => f.status === "pending") ? `<a class="banner" href="#/notifications">${ICON.users} You have follow requests waiting</a>` : ""}
     <div class="seg big" role="tablist">${tabs.map(([k, v]) => `<a role="tab" class="${tab === k ? "on" : ""}" href="${base}/${k}">${v}</a>`).join("")}</div>
     <div id="ptab"></div>`;
 
   const box = $("#ptab");
-  if (!canSee) {
-    box.innerHTML = emptyHTML({ title: "This account is private", text: st === "pending" ? "Your follow request is waiting for approval." : `Follow @${esc(p.username)} to see their rankings and activity.`, action: S.me ? followBtnHTML(p, "") : `<a class="btn primary" href="#/welcome">Join Movi</a>` });
-    return;
-  }
   if (tab === "rankings") {
     if (!rows.length) { box.innerHTML = emptyHTML({ title: own ? "You haven't ranked anything yet" : "No rankings yet", action: own ? `<button class="btn primary" data-act="quick-add">${ICON.plus} Rank a film</button>` : "" }); return; }
     box.innerHTML = listControlsHTML(rows, PQ, "plc") + `<div class="rows" id="prow"></div>`;
@@ -146,10 +142,10 @@ function compareHTML(rows, p, match) {
 
 export async function showFollows(uid, kind) {
   const { followers, following } = await api.getFollows(uid);
-  const list = (kind === "followers" ? followers : following).filter((x) => x.status === "accepted" && x.profile);
+  const list = (kind === "followers" ? followers : following).filter((x) => x.profile);
   const own = uid === S.me?.id;
   openModal(`<h2 class="dlg-title">${kind === "followers" ? "Followers" : "Following"}</h2>
-    <div class="ulist">${list.length ? list.map((x) => userRowHTML(x.profile, own && kind === "followers" ? `${followBtnHTML(x.profile)}<button class="btn sm ghost" data-act="remove-follower" data-uid="${x.id}">Remove</button>` : followBtnHTML(x.profile), `${x.profile.ranked_count} ranked`)).join("") : `<p class="muted">No one yet.</p>`}</div>`);
+    <div class="ulist">${list.length ? list.map((x) => userRowHTML(x.profile, own && kind === "followers" ? `${followBtnHTML(x.profile)}<button class="btn sm ghost" data-act="remove-follower" data-uid="${esc(x.id)}">Remove</button>` : followBtnHTML(x.profile), `${x.profile.ranked_count} ranked`)).join("") : `<p class="muted">No one yet.</p>`}</div>`);
 }
 
 export async function shareProfile(username) {

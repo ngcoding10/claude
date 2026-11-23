@@ -11,7 +11,7 @@ export const S = {
   entries: new Map(),
   watch: [],
   backlog: [],
-  following: new Map(),
+  following: new Set(),
   followers: [],
   friendRows: null,
   matches: new Map(),
@@ -34,7 +34,7 @@ export async function loadSession() {
   S.entries = new Map(rows.map((r) => [r.film_id, r]));
   S.watch = watch;
   S.backlog = await api.getBacklog().catch(() => []);
-  S.following = new Map(follows.following.map((f) => [f.id, f.status]));
+  S.following = new Set(follows.following.map((f) => f.id));
   S.followers = follows.followers;
   S.friendRows = null;
   S.matches = new Map();
@@ -44,7 +44,7 @@ export async function loadSession() {
 }
 
 export function clearSession() {
-  Object.assign(S, { me: null, lists: blankLists(), entries: new Map(), watch: [], backlog: [], following: new Map(), followers: [], friendRows: null, matches: new Map(), unread: 0, skip: new Set() });
+  Object.assign(S, { me: null, lists: blankLists(), entries: new Map(), watch: [], backlog: [], following: new Set(), followers: [], friendRows: null, matches: new Map(), unread: 0, skip: new Set() });
   return null;
 }
 
@@ -53,10 +53,7 @@ export const rankedIds = () => ORDER.flatMap((b) => S.lists[b]);
 export const rankedCount = () => rankedIds().length;
 export const myRows = () => rowsWithScores([...S.entries.values()].filter((r) => findBucket(r.film_id)).map((r) => ({ ...r, ...placement(r.film_id) })));
 export const isWatch = (id) => S.watch.some((w) => w.film_id === id);
-export const followingIds = () => [...S.following].filter(([, s]) => s === "accepted").map(([id]) => id);
-export const followStatus = (id) => S.following.get(id) || null;
-export const acceptedFollowers = () => S.followers.filter((f) => f.status === "accepted");
-export const pendingRequests = () => S.followers.filter((f) => f.status === "pending");
+export const followingIds = () => [...S.following];
 
 function findBucket(id) {
   for (const b of ORDER) if (S.lists[b].includes(id)) return b;
@@ -150,20 +147,14 @@ export function skipFilm(id) { S.skip.add(id); saveSkip(); }
 function saveSkip() { try { localStorage.setItem(skipKey(), JSON.stringify([...S.skip])); } catch {} }
 
 export async function follow(id) {
-  const status = await api.follow(id);
-  S.following.set(id, status);
+  await api.follow(id);
+  S.following.add(id);
   S.friendRows = null;
-  return status;
 }
 export async function unfollow(id) {
   await api.unfollow(id);
   S.following.delete(id);
   S.friendRows = null;
-}
-export async function approveFollower(id) {
-  await api.approveFollower(id);
-  const f = S.followers.find((x) => x.id === id);
-  if (f) f.status = "accepted";
 }
 export async function removeFollower(id) {
   await api.removeFollower(id);
@@ -171,7 +162,7 @@ export async function removeFollower(id) {
 }
 export async function reloadFollows() {
   const f = await api.getFollows(S.me.id);
-  S.following = new Map(f.following.map((x) => [x.id, x.status]));
+  S.following = new Set(f.following.map((x) => x.id));
   S.followers = f.followers;
 }
 

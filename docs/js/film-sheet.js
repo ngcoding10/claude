@@ -47,6 +47,7 @@ export async function openFilm(id) {
   current = { id, det: null, stats: null, others: null };
   openLayer("#sheet", sheetHTML(f));
   $("#sheet .panel").scrollTop = 0;
+  bindDetails(id);
   const token = current;
   const [det, stats, others] = await Promise.all([
     details(id),
@@ -75,6 +76,10 @@ function rerender() {
   const active = document.activeElement;
   const hadFocus = $("#sheet").contains(active);
   const focusKey = hadFocus ? (active.id ? `#${active.id}` : active.dataset.act ? `[data-act="${active.dataset.act}"]` : active.name ? `[name="${active.name}"]` : null) : null;
+  // Anything typed into the watch details while the page was still loading is carried over to the redraw.
+  const form = $("#sheet #details");
+  const entry = S.me ? S.entries.get(current.id) : null;
+  if (form && entry) Object.assign(entry, readDetails(form));
   $("#sheet").innerHTML = sheetHTML(film(current.id), current, false);
   $("#sheet .panel").scrollTop = top;
   bindDetails(current.id);
@@ -203,7 +208,7 @@ export async function recommendDialog(filmId) {
   const f = film(filmId);
   const { following, followers } = await api.getFollows(S.me.id);
   const seen = new Set();
-  const people = [...following, ...followers].filter((x) => x.status === "accepted" && x.profile && !seen.has(x.id) && seen.add(x.id));
+  const people = [...following, ...followers].filter((x) => x.profile && !seen.has(x.id) && seen.add(x.id));
   if (!people.length) {
     openModal(`<h2 class="dlg-title">Recommend ${esc(f.title)}</h2><p class="muted">Follow some people first, then you can send them films.</p><div class="dlg-acts"><a class="btn primary" href="#/people" data-act="modal-close-nav">Find people</a></div>`);
     return;

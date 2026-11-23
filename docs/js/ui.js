@@ -40,7 +40,7 @@ export const nameHTML = (p) => `<a class="uname" href="${userHref(p)}">${esc(p.d
 export const demoTag = (p) => (p?.demo ? `<span class="tag demo" title="Sample member in demo mode">Demo</span>` : "");
 
 export function userRowHTML(p, right = "", sub = "") {
-  return `<div class="urow"><a class="urow-main" href="${userHref(p)}">${avatarHTML(p, 44)}<span><span class="un"><b>${esc(p.display_name || p.username)}</b>${p.is_private ? `<span class="lock" title="Private account">${ICON.lock}</span>` : ""}${demoTag(p)}</span><small>@${esc(p.username)}${sub ? " · " + sub : ""}</small></span></a>${right}</div>`;
+  return `<div class="urow"><a class="urow-main" href="${userHref(p)}">${avatarHTML(p, 44)}<span><span class="un"><b>${esc(p.display_name || p.username)}</b>${demoTag(p)}</span><small>@${esc(p.username)}${sub ? " · " + sub : ""}</small></span></a>${right}</div>`;
 }
 
 // ---------- Layers: film sheet (#sheet), dialog (#modal), ranking flow (#flow) ----------
