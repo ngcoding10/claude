@@ -16,7 +16,7 @@ was changed while writing this file.
 | Repo | `ngcoding10/claude` (formerly `nicorgutierrez08-eng/claude`; GitHub redirects) |
 | Live branch | `claude/beli-app-template-BJhj8` (this branch). There is no `main`. |
 | Other branch | `claude/install-magic-mcp-oxqdA`: an unrelated editor-tooling commit, not part of the app; ignore it. |
-| Live site | https://ngcoding10.github.io/claude/ (GitHub Pages, "deploy from a branch": this branch, `/docs` folder) |
+| Live site | https://ngcoding10.github.io/movi/ (GitHub Pages, "deploy from a branch": this branch, `/docs` folder) |
 | Build | None. Plain HTML/CSS/JS ES modules in `docs/`; push and Pages serves it in about a minute. |
 | Copy on ascoding | https://ascoding11.github.io/movi/ and https://ascoding11.com/movi/: a plain copy of `docs/` in `ASCoding11/ASCoding11.github.io` (`movi/`), merged by Arjun in PR #281 plus a follow-up with the legal pages. It does **not** update by itself. The ascoding copy also has one extra line in `movi/index.html`: `<script src="/offline.js" defer>` (Arjun's offline mode). |
 | Unmerged / half done | Nothing is open. The fork branches `add-movi` and `movi-legal` (on `ngcoding10/ASCoding11.github.io`) are both merged. |
@@ -130,7 +130,7 @@ There's no other server code.
   - "Continue with Google" through Supabase Auth. Google Cloud project `onyx-zodiac-515203-e3`, OAuth client `1079441217435-71jq3rb2lcd9apm4c1fjln6p9bga4ml0.apps.googleusercontent.com`.
   - The Google button only appears when Supabase reports Google as enabled.
 - **Password reset:** by email link back to `#/settings`.
-- **Redirects:** sign-in redirects back to `location.origin + location.pathname`. Supabase's allowed redirect URLs cover `ngcoding10.github.io/claude/**`, `ascoding11.github.io/movi/**` and `ascoding11.com/movi/**`.
+- **Redirects:** sign-in redirects back to `location.origin + location.pathname`. Supabase's allowed redirect URLs cover `ngcoding10.github.io/movi/**`, `ascoding11.github.io/movi/**` and `ascoding11.com/movi/**`.
 - **Usernames:**
   - Chosen at sign-up (live availability check), and changeable in Settings.
   - Lowercase `a-z 0-9 _ .`, 3–20 chars, unique.
